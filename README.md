@@ -2,7 +2,8 @@
 
 # OmniHD-Scenes: A Next-Generation Multimodal Dataset for Autonomous Driving
 
-<sup>1, \*</sup>Lianqing Zheng, <sup>1, \*</sup>Long Yang, <sup>2, \*</sup>Qunshu Lin, <sup>1</sup>Wenjin Ai, <sup>3</sup>Minghao Liu, <sup>1</sup>Shouyi Lu, <sup>4</sup>Jianan Liu, <sup>1</sup>Hongze Ren, <sup>1</sup>Jingyue Mo, <sup>2</sup>Xiaokai Bai,<sup>5</sup>Jie Bai,<sup>1, †</sup>Zhixing Ma,<sup>1,#</sup>Xichan Zhu
+<sup>1, \*</sup>Lianqing Zheng, <sup>1, \*</sup>Long Yang, <sup>2, \*</sup>Qunshu Lin, <sup>1</sup>Wenjin Ai, <sup>3</sup>Minghao Liu, <sup>1</sup>Shouyi Lu,
+<sup>4</sup>Jianan Liu, <sup>1</sup>Hongze Ren, <sup>1</sup>Jingyue Mo, <sup>2</sup>Xiaokai Bai,<sup>5</sup>Jie Bai,<sup>1, †</sup>Zhixing Ma,<sup>1,#</sup>Xichan Zhu
 
 <sup>1</sup>Tongji University, <sup>2</sup>Zhejiang University, <sup>3</sup>2077AI  
 <sup>4</sup>Momoni AI
@@ -36,9 +37,9 @@
 
 ##  🛠️ Abstract
  We present OmniHD-Scenes, a large-scale multimodal dataset that provides comprehensive omnidirectional high-definition data. The OmniHD-Scenes dataset combines data from 128-beam LiDAR, six cameras, and six 4D imaging radar systems to achieve full environmental perception. To date, we have annotated 200 clips with more than 514K precise 3D bounding boxes. These clips also include semantic segmentation annotations for static scene elements. Alongside the proposed dataset, we establish comprehensive evaluation metrics, baseline models, and benchmarks for 3D detection and semantic occupancy prediction. 
-<div style="display: flex; justify-content: center; gap: 10px;">
-  <img src="Figs/vehicle.jpg" width="280"/>
-  <img src="Figs/coordinate.jpg" width="280"/>
+<div style="display: flex; justify-content: center; width: 100%; gap: 10px;">
+  <img src="Figs/vehicle.jpg" style="width: 45%; height: auto;"/>
+  <img src="Figs/coordinate.jpg" style="width: 45%; height: auto;"/>
 </div>
 <div align="center">
   <b>Data Acquisition Platform and Coordinate System</b>
