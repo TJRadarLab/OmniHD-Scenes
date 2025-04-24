@@ -158,7 +158,7 @@ Test a baseline model
 - [ ] Release the codebase (will be released after peer review)
 
 ## ⭐ Others
-If you have any questions about the dataset, feel free to cantact us with tjradarlab@163.com & contact@2077.com.
+If you have any questions about the dataset, feel free to cantact us with tjradarlab@163.com & contact@2077ai.com.
 
 ## 😙 Acknowledgement
 
