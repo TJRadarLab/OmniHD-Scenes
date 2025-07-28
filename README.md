@@ -2,7 +2,7 @@
 
 # OmniHD-Scenes: A Next-Generation Multimodal Dataset for Autonomous Driving
 
-<sup>1, \*</sup>Lianqing Zheng, <sup>1, \*</sup>Long Yang, <sup>2, \*</sup>Qunshu Lin, <sup>1</sup>Wenjin Ai, <sup>3</sup>Minghao Liu, <sup>1</sup>Shouyi Lu, <sup>4</sup>Jianan Liu, <br><sup>1</sup>Hongze Ren, <sup>1</sup>Jingyue Mo, <sup>2</sup>Xiaokai Bai,<sup>5</sup>Jie Bai,<sup>1, †</sup>Zhixing Ma,<sup>1,#</sup>Xichan Zhu
+<sup>1, \*</sup>[Lianqing Zheng](https://zhenglianqing.github.io/), <sup>1, \*</sup>Long Yang, <sup>2, \*</sup>[Qunshu Lin](https://linqunshu.com), <sup>1</sup>Wenjin Ai, <sup>3</sup>[Minghao Liu](https://huggingface.co/Liam-Liu), <sup>1</sup>Shouyi Lu, <sup>4</sup>Jianan Liu, <br><sup>1</sup>Hongze Ren, <sup>1</sup>Jingyue Mo, <sup>2</sup>[Xiaokai Bai](https://shawnnnkb.github.io/),<sup>5</sup>Jie Bai,<sup>1, †</sup>Zhixing Ma,<sup>1,#</sup>Xichan Zhu
 
 <sup>1</sup>Tongji University, <sup>2</sup>Zhejiang University, <sup>3</sup>2077AI  
 <sup>4</sup>Momoni AI
@@ -174,7 +174,7 @@ Test a baseline model
 
 ## 🚀 Model Zoo
 
-We retrained the model and achieved better performance compared to the results reported in the tables of the paper. We provide the checkpoints on View-of-delft (VoD) and TJ4DRadSet datasets, reproduced with the released codebase.
+In this repository, we release baseline models for 3D object detection.
 
 |      Methods       |       Modality       |Image Size  | Backbone | mAP | ODS |      Models                         |
 | :--------------------------------------------------------: | :------: | :------: | :------: | :--------: | :-------: | :----------------------------------------------------------: |
