@@ -1,0 +1,22 @@
+{
+  "class_range": {
+    "car":[70,55],
+    "truck":[70,55],
+    "trailer":[70,55],
+    "bus":[70,55],
+    "engineering_vehicle":[70,55],
+    "rider":[70,55],
+    "pedestrian":[70,55],
+    "tricyclist":[70,55],
+    "light_truck":[70,55]
+  },
+
+  "dist_fcn": "center_distance",
+  "dist_ths": [1.0, 2.0, 3.0, 4.0],
+  "dist_th_tp": 3.0,
+  "min_recall": 0.1,
+  "min_precision": 0.1,
+  "max_boxes_per_sample": 500,
+  "mean_ap_weight": 4
+}
+

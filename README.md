@@ -29,6 +29,7 @@
 </p>
 
 ## 🔥 News
+•	**[2025-07-28]** 🚀 Our codebase and detection models have been released.
 
 •	**[2025-04-15]** 🎉 Our OmniHD-Scenes dataset v1.0 (~1.3TB) is openly [accessible](https://www.2077ai.com/contact) for research purposes.
 
@@ -137,6 +138,26 @@ git checkout v0.17.1
 pip install -v -e .  
 ```
 
+Install others
+```
+pip install scikit-image==0.19.3  
+pip install einops fvcore seaborn iopath==0.1.9 timm==0.6.13  typing-extensions==4.5.0 pylint ipython==8.12  numpy==1.19.5 matplotlib==3.5.2 numba==0.48.0 pandas==1.4.4 scikit-image==0.19.3 setuptools==59.5.0 torch_scatter==2.1.1
+python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+pip install yapf==0.40.1
+python projects/setup.py develop
+python projects/setup_bevpool2.py develop
+```
+### Generate PKL
+
+Generate PKL file for only 3D object detection training and testing
+```
+python ./newscenes_devkit/newscenes_converter_final.py
+```
+Generate PKL file for Occupancy&OD  training and testing
+```
+python ./tools/merge_data_with_occ.py
+```
+Or you can download our generated [pkl_files](https://pan.baidu.com/s/1QLTnUnJ5nmZARD0McysaEw?pwd=TJ4D).
 ### Test
 
 Test a baseline model
@@ -151,14 +172,30 @@ Test a baseline model
 ![OCC](./Figs/OCC_results.png)
 
 
-## ⏳ To Do
+## 🚀 Model Zoo
 
-- [ ] Release baseline models
+We retrained the model and achieved better performance compared to the results reported in the tables of the paper. We provide the checkpoints on View-of-delft (VoD) and TJ4DRadSet datasets, reproduced with the released codebase.
+
+|      Methods       |       Modality       |Image Size  | Backbone | mAP | ODS |      Models                         |
+| :--------------------------------------------------------: | :------: | :------: | :------: | :--------: | :-------: | :----------------------------------------------------------: |
+| [PointPillars](projects/configs/PointPillars_NewScenes/pointpillars_LiDAR.py) | LiDAR |   ---    |   ---    |   61.15   |   55.54   | [Link](https://pan.baidu.com/s/1pihyepSM_IqyxPttQC8dNg?pwd=TJ4D) |
+| [PointPillars](projects/configs/PointPillars_NewScenes/pointpillars_4DRadar.py) | 4D Radar |   ---    |   ---    |   23.82   |   37.21   | [Link](https://pan.baidu.com/s/1VNgnPjxavunxbK4_FjkQGg?pwd=TJ4D) |
+| [RadarPillarNet](projects/configs/RCFusion_NewScenes/radar_stream/RadarPillarNet.py) | 4D Radar |   ---    |   ---    |   24.88   |   37.81   | [Link](https://pan.baidu.com/s/12DjKyFX-36e8feg54ZGY-w?pwd=TJ4D) |
+| [LSS](projects/configs/bevfusion_NewScenes/cam_stream/LSS.py) | Camera |   544×960    |   R50    |   22.44   |   26.01   | [Link](https://pan.baidu.com/s/1zpazgF6JNSi93QznVCq4Lw?pwd=TJ4D) |
+| [BEVFormer-T](projects/configs/bevformer_NewScenes/bevformer_T_R50.py) | Camera |   544×960    |   R50    |   29.17   |   30.54   | [Link](https://pan.baidu.com/s/1NSKhRaC6Ioo1mVDuT3K4Iw?pwd=TJ4D) |
+| [BEVFormer-T](projects/configs/bevformer_NewScenes/bevformer_T_R101.py) | Camera |   864×1536    |   R101-DCN    |   32.22   |   32.57   | [Link](https://pan.baidu.com/s/1IhchCkgGndlW8o6TDsQ_Hw?pwd=TJ4D) |
+| [BEVFusion](projects/configs/bevfusion_NewScenes/bevfusion.py) | Camera+4D Radar |   544×960    |   R50    |   33.95  |   43.00   | [Link](https://pan.baidu.com/s/1oYBsA3lQ-S4UhfcN8SpL-Q?pwd=TJ4D) |
+| [RCFusion](projects/configs/RCFusion_NewScenes/rcfusion_lss.py) | Camera+4D Radar |   544×960    |   R50    |   34.88  |   41.53   | [Link](https://pan.baidu.com/s/1kp7-RXjiLTxklEAXt646IA?pwd=TJ4D) |
+## ⏳ To Do
+- [x] Release the CodeBase 
+- [x] Release the Evaluation Devkit (For historical reasons, it is referred to by its original project name newscenes_devkit within the code)
+- [x] Release OD baseline models
 - [ ] Release the OCC label
-- [ ] Release the codebase (will be released after peer review)
+- [ ] [Release OCC baseline models](https://github.com/LucasYang567/MetaOcc)
+
 
 ## ⭐ Others
-If you have any questions about the dataset, feel free to cantact us with tjradarlab@163.com & contact@2077.com.
+If you have any questions about the dataset, feel free to cantact us with tjradarlab@163.com & contact@2077ai.com.
 
 ## 😙 Acknowledgement
 
