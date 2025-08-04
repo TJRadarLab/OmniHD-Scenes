@@ -199,11 +199,11 @@ In this repository, we release baseline models for 3D object detection.
 If you have any questions about the dataset, feel free to cantact us with tjradarlab@163.com & contact@2077ai.com.
 
 ## 🎬 Video Demo
-[![Watch the video](Figs/video_od.png)](https://github.com/user-attachments/assets/638eeead-2800-4a42-802a-d7f5e8149992)
+[![Watch the video](Figs/video_od.png)](https://github.com/user-attachments/assets/b3b5df8d-1443-4f1f-847e-5efe0b0aadab)
 
-[![Watch the video](Figs/video_occ.png)](https://github.com/user-attachments/assets/f5822cbc-4dca-42d0-a06b-f7faf02a08dc)
+[![Watch the video](Figs/video_occ.png)](https://github.com/user-attachments/assets/cd91a240-c0bc-4f9b-9601-edd38d64908c)
 
-[![Watch the video](Figs/video_CTS.png)](https://github.com/user-attachments/assets/d683a67a-63e1-4013-9f53-08df7f28a4b3)
+[![Watch the video](Figs/video_CTS.png)](https://github.com/user-attachments/assets/2b67aeea-8ede-4df1-acd3-64fd93fbaed6)
 ## 😙 Acknowledgement
 
 Many thanks to these exceptional open source projects:
