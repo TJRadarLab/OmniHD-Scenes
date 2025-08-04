@@ -35,6 +35,7 @@
 
 •	**[2024-12-31]** 🌐 The [project page](https://www.2077ai.com/OmniHD-Scenes) is now online.
 
+
 ##  🛠️ Abstract
  We present OmniHD-Scenes, a large-scale multimodal dataset that provides comprehensive omnidirectional high-definition data. The OmniHD-Scenes dataset combines data from 128-beam LiDAR, six cameras, and six 4D imaging radar systems to achieve full environmental perception. To date, we have annotated 200 clips with more than 514K precise 3D bounding boxes. These clips also include semantic segmentation annotations for static scene elements. Alongside the proposed dataset, we establish comprehensive evaluation metrics, baseline models, and benchmarks for 3D detection and semantic occupancy prediction. 
 <div style="display: flex; justify-content: center; width: 100%; gap: 10px;">
@@ -197,6 +198,12 @@ In this repository, we release baseline models for 3D object detection.
 ## ⭐ Others
 If you have any questions about the dataset, feel free to cantact us with tjradarlab@163.com & contact@2077ai.com.
 
+## 🎬 Video Demo
+[![Watch the video](Figs/video_od.png)](https://github.com/user-attachments/assets/1d99824e-a75e-4f6f-a7dc-d64127776be5)
+
+[![Watch the video](Figs/video_occ.png)](https://github.com/user-attachments/assets/f5822cbc-4dca-42d0-a06b-f7faf02a08dc)
+
+[![Watch the video](Figs/video_CTS.png)](https://github.com/user-attachments/assets/d683a67a-63e1-4013-9f53-08df7f28a4b3)
 ## 😙 Acknowledgement
 
 Many thanks to these exceptional open source projects:
