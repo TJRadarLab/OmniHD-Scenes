@@ -2,7 +2,7 @@
 
 # OmniHD-Scenes: A Next-Generation Multimodal Dataset for Autonomous Driving
 
-<sup>1, \*</sup>[Lianqing Zheng](https://zhenglianqing.github.io/), <sup>1, \*</sup>[Long Yang](https://lucasyang567.github.io/), <sup>2, \*</sup>[Qunshu Lin](https://linqunshu.com), <sup>1</sup>Wenjin Ai, <sup>3</sup>[Minghao Liu](https://huggingface.co/Liam-Liu), <sup>1</sup>Shouyi Lu, <sup>4</sup>Jianan Liu, <br><sup>1</sup>Hongze Ren, <sup>1</sup>Jingyue Mo, <sup>2</sup>[Xiaokai Bai](https://shawnnnkb.github.io/),<sup>5</sup>Jie Bai,<sup>1, †</sup>Zhixing Ma,<sup>1,#</sup>Xichan Zhu
+<sup>1, \*</sup>[Lianqing Zheng](https://zhenglianqing.github.io/), <sup>1, \*</sup>[Long Yang](https://lucasyang567.github.io/), <sup>2, \*</sup>[Qunshu Lin](https://linqunshu.com), <sup>1</sup>Wenjin Ai, <sup>3</sup>[Minghao Liu](https://huggingface.co/Liam-Liu), <sup>1</sup>[Shouyi Lu](https://shouyilu.github.io/), <sup>4</sup>Jianan Liu, <br><sup>1</sup>Hongze Ren, <sup>1</sup>Jingyue Mo, <sup>2</sup>[Xiaokai Bai](https://shawnnnkb.github.io/),<sup>5</sup>Jie Bai,<sup>1, †</sup>Zhixing Ma,<sup>1,#</sup>Xichan Zhu
 
 <sup>1</sup>Tongji University, <sup>2</sup>Zhejiang University, <sup>3</sup>2077AI  
 <sup>4</sup>Momoni AI
