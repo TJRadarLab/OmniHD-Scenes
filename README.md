@@ -120,6 +120,7 @@ OmniHD-Scenes
 <div align="center">
   <b> Ego trajectory visualization</b>
 </div>
+
 ## 🔨 Quick Start
 ### Installation
 You can install the whole repository by following these steps:
