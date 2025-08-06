@@ -96,18 +96,30 @@ OmniHD-Scenes
   <img src="Figs/3DOD.jpg" alt="logo" >
 </div>
 <div align="center">
-  <b> Multiple scenes and 3D annotation visualization
-  System</b>
+  <b> Multiple scenes and 3D annotation visualization</b>
 </div>
 
 <div align="center">
   <img src="Figs/OCC.jpg" alt="logo" >
 </div>
+
 <div align="center">
   <b> Multiple scenes and semantic occupancy visualization</b>
 </div>
 
+<div align="center">
+  <img src="Figs/CTS.png" alt="logo" >
+</div>
+<div align="center">
+  <b> Closed Test Site scenarios</b>
+</div>
 
+<div align="center">
+  <img src="Figs/ego_traj.png" alt="logo" >
+</div>
+<div align="center">
+  <b> Ego trajectory visualization</b>
+</div>
 ## 🔨 Quick Start
 ### Installation
 You can install the whole repository by following these steps:
