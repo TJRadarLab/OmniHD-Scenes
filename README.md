@@ -238,3 +238,6 @@ As it is not possible to list all the projects of the reference papers. If you f
   year={2024}
 }
 ```
+## ⭐️ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=TJRadarLab/OmniHD-Scenes&type=Date)](https://www.star-history.com/#TJRadarLab/OmniHD-Scenes)
