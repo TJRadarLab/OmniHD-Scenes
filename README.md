@@ -31,7 +31,7 @@
 ## 🔥 News
 •	**[2025-07-28]** 🚀 Our codebase and detection models have been released.
 
-•	**[2025-04-15]** 🎉 Our OmniHD-Scenes dataset v1.0 (~1.3TB) is openly [accessible](https://www.2077ai.com/contact) for research purposes.
+•	**[2025-04-15]** 🎉 Our OmniHD-Scenes dataset v1.0 (~1.3TB) is openly [accessible](https://www.2077ai.com/contact) for research purposes. A [Python script](download_oss.py) is also available to help with downloading and organizing the data.
 
 •	**[2024-12-31]** 🌐 The [project page](https://www.2077ai.com/OmniHD-Scenes) is now online.
 
