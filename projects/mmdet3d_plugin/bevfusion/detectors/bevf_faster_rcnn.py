@@ -6,12 +6,6 @@ import numpy as np
 
 from mmdet.models import DETECTORS
 from mmdet3d.models.detectors import MVXFasterRCNN
-#-------------更改depthnet/bevpool------------
-# from .cam_stream_lss import LiftSplatShoot
-
-# from .cam_stream_lss_bevpool import LiftSplatShoot
-
-#-------------使用bevpoolv2------------
 from .cam_stream_lss_bevpoolv2 import LiftSplatShoot
 
 from mmcv.cnn import (build_conv_layer, build_norm_layer, build_upsample_layer,
@@ -33,7 +27,6 @@ class SE_Block(nn.Module):
 @DETECTORS.register_module()
 class BEVF_FasterRCNN(MVXFasterRCNN):
     """Multi-modality BEVFusion using Faster R-CNN."""
-    #---img_depth默认kld
     def __init__(self, freeze_img=False, lss=False, lc_fusion=False, camera_stream=False,
                 camera_depth_range=[4.0, 45.0, 1.0], img_depth_loss_weight=1.0,  img_depth_loss_method='kld',
                 grid=0.6, num_views=6, se=False,
@@ -56,7 +49,7 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
         self.img_depth_loss_method = img_depth_loss_method
         self.camera_depth_range = camera_depth_range
         self.lift = camera_stream
-        self.se = se  #--融合
+        self.se = se
         if camera_stream:
             self.lift_splat_shot_vis = LiftSplatShoot(lss=lss, grid=grid, inputC=imc, camC=64, 
             pc_range=pc_range,camera_depth_range=camera_depth_range, final_dim=final_dim, downsample=downsample)
@@ -72,14 +65,13 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
                 norm_cfg=dict(type='BN', eps=1e-3, momentum=0.01),
                 act_cfg=dict(type='ReLU'),
                 inplace=False)
-        #-------这里初始化先调用init_weights进行初始化，然后图片分支冻结--
-        #-------之后再train文件中读取预训练权重------------
+        # initialization and optional freezing of image branch
         self.freeze_img = freeze_img
-        # self.init_weights(pretrained=kwargs.get('pretrained', None))#--已经在父类中init_cfg
+        # self.init_weights(pretrained=kwargs.get('pretrained', None))
         self.freeze()
 
 
-        #------------增加bev可视化--------------
+        # bev visualization
         self.draw_interval = 2000
         self.vis_time_bev = -1
 
@@ -124,9 +116,9 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
             for sample_idx in range(batch_size):
                 rot_list = []
                 trans_list = []
-                for mat in img_metas[sample_idx]['lidar2img']:  #---['lidar2img']应该是最原始的
+                for mat in img_metas[sample_idx]['lidar2img']:  
                     mat = torch.Tensor(mat).to(img_feats_view.device)
-                    rot_list.append(mat.inverse()[:3, :3]) #---求逆了img2lidar
+                    rot_list.append(mat.inverse()[:3, :3]) 
                     trans_list.append(mat.inverse()[:3, 3].view(-1))
                 rot_list = torch.stack(rot_list, dim=0) #--torch.Size([6, 3, 3])
                 trans_list = torch.stack(trans_list, dim=0) #--torch.Size([6, 3])
@@ -148,13 +140,13 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
                     if self.se:
                         pts_feats = [self.seblock(pts_feats[0])]
 
-        #-----------绘制一下tensor----
+            # draw tensor for BEV visualization
         self.vis_time_bev += 1
         if self.vis_time_bev % self.draw_interval == 0:
             from projects.mmdet3d_plugin.models.utils.visual import draw_bev_img
             bev_feat = pts_feats[0].clone()
             draw_bev_img(bev_feat,img_metas,self.vis_time_bev)
-        #---------------------------------------    
+        
 
         return dict(
             img_feats = img_feats,
@@ -198,8 +190,8 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
                       gt_bboxes_ignore=None):
         feature_dict = self.extract_feat(
             points, img=img, img_metas=img_metas, gt_bboxes_3d=gt_bboxes_3d)
-        img_feats = feature_dict['img_feats'] #---6路图像特征
-        pts_feats = feature_dict['pts_feats'] #--bev特征
+        img_feats = feature_dict['img_feats'] 
+        pts_feats = feature_dict['pts_feats'] 
         depth_dist = feature_dict['depth_dist']
 
         losses = dict()
@@ -215,7 +207,7 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
                 gt_bboxes=gt_bboxes,
                 gt_labels=gt_labels,
                 gt_bboxes_ignore=gt_bboxes_ignore,
-                proposals=proposals) #--空
+                proposals=proposals) 
             if img_depth is not None: 
                 
 
@@ -234,7 +226,7 @@ class BEVF_FasterRCNN(MVXFasterRCNN):
         guassian_depth = guassian_depth.view(-1, D)[mask] #--[69901,41]
         predict_depth_dist = predict_depth_dist.permute(0, 1, 3, 4, 2).reshape(-1, D)[mask] #--[69901,41]
         if loss_method=='kld':
-            #----------这里按照openoccupancy加了一个数，reduction='batchmean'，防止出现0导致无法训练nan
+            
             loss = F.kl_div(torch.log(predict_depth_dist + 1e-4), guassian_depth, reduction='batchmean', log_target=False)
         elif loss_method=='mse':
             loss = F.mse_loss(predict_depth_dist, guassian_depth)

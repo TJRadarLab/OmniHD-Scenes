@@ -121,7 +121,6 @@ class QuickCumsum(torch.autograd.Function):
 
         return val, None, None
 
-#----------预测深度概率并将特征与概率相乘，bevpoolv2不进行外积-----
 class CamEncode(nn.Module):
     def __init__(self, D, C, inputC):
         super(CamEncode, self).__init__()
@@ -174,11 +173,6 @@ class LiftSplatShoot(nn.Module):
         dx, bx, nx = gen_dx_bx(self.grid_conf['xbound'],
                                self.grid_conf['ybound'],
                                self.grid_conf['zbound'], )
-        #------------与BaseModule中的init冲突，longtensor无法取mean----------------
-        #------------参数会在cuda下，需要修改-----
-        # self.dx = nn.Parameter(dx, requires_grad=False)  #---tensor([0.5000, 0.5000, 0.5000], device='cuda:0')--
-        # self.bx = nn.Parameter(bx, requires_grad=False) #----tensor([-49.7500, -49.7500,  -4.7500], device='cuda:0')
-        # self.nx = nn.Parameter(nx, requires_grad=False) #---tensor([200, 200,  16], device='cuda:0')
         
         self.dx = dx #---tensor([0.5000, 0.5000, 0.5000], device='cuda:0')--
         self.bx = bx#tensor([-59.7500, -39.7500,  -2.7500])
@@ -188,7 +182,7 @@ class LiftSplatShoot(nn.Module):
         self.fH, self.fW = self.final_dim[0] // self.downsample, self.final_dim[1] // self.downsample
         self.camC = camC
         self.inputC = inputC
-        self.frustum = self.create_frustum() #--#--torch.Size([59, 135, 240, 3]),代表原始图像大小和深度
+        self.frustum = self.create_frustum() #--#--torch.Size([59, 135, 240, 3])
         self.D, _, _, _ = self.frustum.shape
         self.camencode = CamEncode(self.D, self.camC, self.inputC)
         
@@ -213,13 +207,12 @@ class LiftSplatShoot(nn.Module):
             nn.ReLU(inplace=True)
         )
         if self.lss:
-          self.bevencode = nn.Sequential(
-            nn.Conv2d(cz, camC, kernel_size=1, padding=0, bias=False),
-            nn.BatchNorm2d(camC),
-            BevEncode(inC=camC, outC=inputC)
+            self.bevencode = nn.Sequential(
+                nn.Conv2d(cz, camC, kernel_size=1, padding=0, bias=False),
+                nn.BatchNorm2d(camC),
+                BevEncode(inC=camC, outC=inputC)
 
-        )
-    #-在图像平面创建网格，每个代表的尺寸为
+                )
     def create_frustum(self):
         # make grid in image plane
         ogfH, ogfW = self.final_dim  #---[1080,1920]
@@ -229,7 +222,7 @@ class LiftSplatShoot(nn.Module):
         xs = torch.linspace(0, ogfW - 1, fW, dtype=torch.float).view(1, 1, fW).expand(D, fH, fW)
         ys = torch.linspace(0, ogfH - 1, fH, dtype=torch.float).view(1, fH, 1).expand(D, fH, fW)
 
-        # D x H x W x 3按xyz順序
+        # D x H x W x 3 (xyz order)
         frustum = torch.stack((xs, ys, ds), -1) #--[59,135,240,3]
         return nn.Parameter(frustum, requires_grad=False)
 
@@ -250,27 +243,27 @@ class LiftSplatShoot(nn.Module):
         else:
             points = self.frustum.repeat(B, N, 1, 1, 1, 1).unsqueeze(-1)  # B x N x D x H x W x 3 x 1 torch.Size([1, 6, 69,135,240,3, 1])
 
-        # cam_to_ego rots和trans已经是img2lidar了
+        # cam_to_ego: rots and trans are img->lidar
         points = torch.cat((points[:, :, :, :, :, :2] * points[:, :, :, :, :, 2:3],
                             points[:, :, :, :, :, 2:3]
                             ), 5) #torch.Size([1, 6, 59, 135, 240, 3, 1])
         points = rots.view(B, N, 1, 1, 1, 3, 3).matmul(points).squeeze(-1)
         points += trans.view(B, N, 1, 1, 1, 3) #--torch.Size([1, 6, 59, 135, 240, 3])
-        #---转到lidar坐标系下
+        # transform to lidar coordinate frame
         if extra_rots is not None or extra_trans is not None:
             if extra_rots is not None:
                 points = extra_rots.view(B, N, 1, 1, 1, 3, 3).matmul(points.unsqueeze(-1)).squeeze(-1)
             if extra_trans is not None:
                 points += extra_trans.view(B, N, 1, 1, 1, 3)
         return points
-    #--------这里输出改了，self.camencode不进行外积-----
+    # output format changed: self.camencode does not perform outer product
     def get_cam_feats(self, x):
         """Return B x N x D x H/downsample x W/downsample x C
         """
         B, N, C, H, W = x.shape
 
         x = x.view(B * N, C, H, W)
-        x, depth = self.camencode(x) #
+        x, depth = self.camencode(x)
         for shape_id in range(3):
             assert depth.shape[shape_id+1] == self.frustum.shape[shape_id]
         x = x.view(B, N, self.camC, H, W)
@@ -363,7 +356,7 @@ class LiftSplatShoot(nn.Module):
         
         x, depth = self.get_cam_feats(x) #torch.Size([1, 6, 64, 135, 240])，torch.Size([1, 6, 59, 135, 240])
 
-        x = self.voxel_pooling_v2(geom, depth, x) #改成bevpool
+        x = self.voxel_pooling_v2(geom, depth, x) 
         
         return x, depth
 

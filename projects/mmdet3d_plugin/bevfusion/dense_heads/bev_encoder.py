@@ -44,7 +44,6 @@ class Up(nn.Module):
         x1 = torch.cat([x2, x1], dim=1)
         return self.conv(x1)
 
-#-----------这里只连接了1、3特征图----
 class BevEncode(nn.Module):
     def __init__(self, numC_input, numC_output, num_layer=[2, 2, 2], num_channels=None,
                  backbone_output_ids=None,  norm_cfg=dict(type='BN'), out_with_activision=False,
@@ -52,7 +51,7 @@ class BevEncode(nn.Module):
                  bev_encoder_fpn_type='lssfpn'):
         super(BevEncode, self).__init__()
 
-        # build downsample modules for multiview learning没用到---
+        # build downsample modules for multiview learning
         self.multiview_learning = multiview_learning
         if self.multiview_learning:
             downsample_conv_list = []
@@ -75,7 +74,7 @@ class BevEncode(nn.Module):
 
         # default: [128, 256, 512]
 
-        # 输出最后三层特征
+        # output the last three feature maps
         self.backbone_output_ids = range(len(
             num_layer) - 3, len(num_layer)) if backbone_output_ids is None else backbone_output_ids
 
@@ -102,7 +101,7 @@ class BevEncode(nn.Module):
                                     norm_cfg=norm_cfg)]
                 curr_numC = num_channels[i]
                 layer.extend([BasicBlock(curr_numC, curr_numC, norm_cfg=norm_cfg)
-                             for _ in range(num_layer[i]-1)]) #-----这里是否可以不加
+                             for _ in range(num_layer[i]-1)])
                 layers.append(nn.Sequential(*layer))
         else:
             assert False
@@ -137,7 +136,7 @@ class BevEncode(nn.Module):
                 nn.ReLU(inplace=True),
             )
         else:
-            # 移除掉输出层的 linear conv, 使得输出为激活后的特征值
+            # remove linear conv from output layer to keep activated features
             self.up2 = nn.Sequential(
                 nn.Upsample(scale_factor=2, mode='bilinear',
                             align_corners=True),
@@ -157,10 +156,10 @@ class BevEncode(nn.Module):
         self.fp16_enabled = False
 
     def forward(self, bev_feat_list):
-        feats = [] #---torch.Size([1, 512, 80, 120])torch.Size([1, 1024, 40, 60])torch.Size([1, 2048, 20, 30])
-        x_tmp = bev_feat_list[0] #---torch.Size([1, 256, 160, 240])
-        for lid, layer in enumerate(self.layers): #---两个basic block
-            x_tmp = layer(x_tmp) #---torch.Size([1, 512, 80, 120])torch.Size([1, 1024, 40, 60])torch.Size([1, 2048, 20, 30])
+        feats = []
+        x_tmp = bev_feat_list[0]
+        for lid, layer in enumerate(self.layers):
+            x_tmp = layer(x_tmp)
             # x_tmp = checkpoint.checkpoint(layer,x_tmp)
             if lid in self.backbone_output_ids:
                 feats.append(x_tmp)

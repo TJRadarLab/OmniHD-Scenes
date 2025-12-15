@@ -11,8 +11,6 @@ from mmcv.cnn import build_norm_layer
 from mmdet3d.models.builder import HEADS, build_loss
 #------使用resnet+fpn--------------
 from .bev_encoder import BevEncode
-#-----使用简单的卷积---------
-# from .bev_encoder_small import BevEncode
 from .map_head import BevFeatureSlicer
 from mmcv.runner import auto_fp16, force_fp32
 
@@ -90,20 +88,19 @@ class MultiTaskHeadv2(BaseModule):
         if self.task_enbale.get('occ', False):
             self.task_decoders['occ'].init_weights()
 
-#--------------对每个任务中的子loss加权-----------
+
     def scale_task_losses(self, task_name, task_loss_dict):
         task_sum = 0
         if task_name == '3dod':
             for key, val in task_loss_dict.items():
-                task_sum += val[0].item()  #---这里OD是一个[tensor(X)],OCC是tensor(X)
+                task_sum += val[0].item()  
                 task_loss_dict[key] = val[0] * self.task_weights.get(task_name, 1.0)
         if task_name == 'occ':
             for key, val in task_loss_dict.items():
-                task_sum += val.item()  #---这里OD是一个[tensor(X)],OCC是tensor(X)
+                task_sum += val.item()  
                 task_loss_dict[key] = val * self.task_weights.get(task_name, 1.0)
         
         
-        #--这里在basedetector中时没有计算，只计算key中带有'loss'的
         task_loss_summation = sum(list(task_loss_dict.values()))
         task_loss_dict['{}_sum'.format(task_name)] = task_loss_summation
 
@@ -133,10 +130,8 @@ class MultiTaskHeadv2(BaseModule):
 
         return loss_dict
 
-#------输出解码的bbox和原始的occ_pred--------------
     def inference(self, predictions, img_metas, rescale):
         res = {}
-        # 输出预测的bbox
         if self.task_enbale.get('3dod', False):
             res['bbox_list'] = self.task_decoders['3dod'].get_bboxes(
                 *predictions['3dod'],
@@ -144,13 +139,11 @@ class MultiTaskHeadv2(BaseModule):
                 rescale=rescale
             )
 
-        # occ head 输出原始预测#--torch.Size([1, 240, 160, 16, 19])
         if self.task_enbale.get('occ', False):
             res['occ_pred'] = predictions['occ']
 
         return res
     
-#-------------------暂时不用-----------------------
     def forward_with_shared_features(self, bev_feats, targets=None):
         predictions = {}
        
@@ -170,7 +163,6 @@ class MultiTaskHeadv2(BaseModule):
         return predictions
 #--------------------------------------------------------------------
 
-#-----------------输出dict{'3dod':([cls_scoretensor],[bbox_predtensor],[dir_cls_predstensor]),'occ':tensor}
     def forward(self, bev_feats, targets=None): #--torch.Size([1, 256, 160, 240])
         if self.shared_feature:
             return self.forward_with_shared_features(bev_feats, targets)
