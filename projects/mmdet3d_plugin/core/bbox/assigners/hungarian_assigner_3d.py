@@ -46,7 +46,7 @@ class HungarianAssigner3D(BaseAssigner):
                  pc_range=None):
         self.cls_cost = build_match_cost(cls_cost)  #--'FocalLossCost'
         self.reg_cost = build_match_cost(reg_cost)  #--'BBox3DL1Cost'
-        self.iou_cost = build_match_cost(iou_cost)  #--'IoUCost'这里权重是0
+        self.iou_cost = build_match_cost(iou_cost)  #--'IoUCost' (weight is 0 here)
         self.pc_range = pc_range
 
     def assign(self,
@@ -86,17 +86,17 @@ class HungarianAssigner3D(BaseAssigner):
         """
         assert gt_bboxes_ignore is None, \
             'Only case when gt_bboxes_ignore is None is supported.'
-        #------gt个数31，obj_q900-------------
+        # number of ground-truths (e.g. 31) and number of object queries (e.g. 900)
         num_gts, num_bboxes = gt_bboxes.size(0), bbox_pred.size(0)
 
-        # 1. assign -1 by default torch.Size([900])900个-1
+        # 1. assign -1 by default (e.g. torch.Size([900]))
         assigned_gt_inds = bbox_pred.new_full((num_bboxes, ),
                                               -1,
                                               dtype=torch.long)
         assigned_labels = bbox_pred.new_full((num_bboxes, ),
                                              -1,
                                              dtype=torch.long)
-        #----------判断是否无gt-------------
+        # check if there are no ground-truths
         if num_gts == 0 or num_bboxes == 0:
             # No ground truth or boxes, return empty assignment
             if num_gts == 0:
@@ -106,18 +106,18 @@ class HungarianAssigner3D(BaseAssigner):
                 num_gts, assigned_gt_inds, None, labels=assigned_labels)
 
         # 2. compute the weighted costs
-        # classification and bboxcost.
-        cls_cost = self.cls_cost(cls_pred, gt_labels) #--torch.Size([900, 31])当前帧的label个数
+        # classification and bbox cost.
+        cls_cost = self.cls_cost(cls_pred, gt_labels) #--torch.Size([900, 31]) number of gt labels in current frame
         # regression L1 cost
-        #--------输出(cx, cy, w, l, cz, h, rot.sin(), rot.cos(), vx, vy)
-        #--------wlh取了log------------
+        # output format: (cx, cy, w, l, cz, h, rot.sin(), rot.cos(), vx, vy)
+        # note: width/length/height are log-scaled
         normalized_gt_bboxes = normalize_bbox(gt_bboxes, self.pc_range)
         #--torch.Size([900, 31])，L1
         reg_cost = self.reg_cost(bbox_pred[:, :8], normalized_gt_bboxes[:, :8])
       
         # weighted sum of above two costs
         cost = cls_cost + reg_cost  #--torch.Size([900, 31])
-        #-------匈牙利匹配--------
+        # Hungarian matching
         # 3. do Hungarian matching on CPU using linear_sum_assignment
         cost = cost.detach().cpu()
         if linear_sum_assignment is None:
@@ -133,7 +133,8 @@ class HungarianAssigner3D(BaseAssigner):
         # assign all indices to backgrounds first
         assigned_gt_inds[:] = 0
         # assign foregrounds based on matching results
-        assigned_gt_inds[matched_row_inds] = matched_col_inds + 1 #---这里加1因为后面采样时判断是否是非零
+        # add 1 because later sampling checks for non-zero (0 means background)
+        assigned_gt_inds[matched_row_inds] = matched_col_inds + 1
         assigned_labels[matched_row_inds] = gt_labels[matched_col_inds]
         return AssignResult(
             num_gts, assigned_gt_inds, None, labels=assigned_labels)

@@ -9,7 +9,7 @@ import numpy as np
 import pyquaternion
 import tempfile
 from newscenes_devkit.data_classes import Box as NewScenesBox
-### 需要专门设置一个git项目用于保存newscenes_devkit项目，偏于各项目迁移
+
 from os import path as osp
 
 from mmdet.datasets import DATASETS
@@ -38,7 +38,7 @@ class NewScenesOccDataset(NewScenesDataset):
         self.class_names = classes
         self.overlap_test = overlap_test
 
-#----------------------这里根据需求进行修改---------------
+# ---------------------- customize as needed ---------------
     def prepare_train_data(self, index):
         """Training data preparation.
 
@@ -92,10 +92,10 @@ class NewScenesOccDataset(NewScenesDataset):
             pc_range = np.array(self.pc_range),
         )
 
-        #-------加入radar数据------
+        # Add radar data if present
         if self.modality['use_radar']: 
             input_dict['radars'] = info['radars']
-        #------加入图像数据，这里要注意加入畸变系数------------
+        # Add camera data (include distortion coefficients)
         if self.modality['use_camera']:
             image_paths = []
             lidar2img_rts = []
@@ -105,8 +105,8 @@ class NewScenesOccDataset(NewScenesDataset):
             for cam_type, cam_info in info['cams'].items():
                 image_paths.append(cam_info['data_path'])
                 # obtain lidar to image transformation matrix
-    #---------等效于直接4*4求逆矩阵，这里的平移旋转外参在pkl文件时已经是考虑了不同时刻egopose---------------
-                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation']) #这个就是R矩阵
+                # Equivalent to inverse of 4x4; extrinsics in PKL already account for ego-pose timing
+                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])
                 lidar2cam_t = cam_info[
                     'sensor2lidar_translation'] @ lidar2cam_r.T
                 lidar2cam_rt = np.eye(4)
@@ -115,7 +115,7 @@ class NewScenesOccDataset(NewScenesDataset):
                 intrinsic = np.array(cam_info['cam_intrinsic'])
                 viewpad = np.eye(4)
                 viewpad[:intrinsic.shape[0], :intrinsic.shape[1]] = intrinsic
-                lidar2img_rt = (viewpad @ lidar2cam_rt.T) #--实际就是K*lidar2cam，这里lidar2cam_rt求逆才是第四行0001---
+                lidar2img_rt = (viewpad @ lidar2cam_rt.T) # effectively K * lidar2cam; inverse yields homogeneous [0,0,0,1] row
                 lidar2img_rts.append(lidar2img_rt)
 
                 cam_intrinsics.append(viewpad)
@@ -130,20 +130,12 @@ class NewScenesOccDataset(NewScenesDataset):
                     cam_distortion=cam_distortion,
                 ))
 
-        if not self.test_mode: #-----------这里控制是不是测试集无标签----
+        if not self.test_mode: # control whether the test set has labels
             annos = self.get_ann_info(index)
             input_dict['ann_info'] = annos
 
         return input_dict
 
-    # ### 实验-小批量数据
-    # def __len__(self):
-    #     """Return the length of data infos.
-
-    #     Returns:
-    #         int: Length of data infos.
-    #     """
-    #     return 100
     
     def format_results(self, results, jsonfile_prefix=None):
         """Format the results to json (standard format for COCO evaluation).
@@ -209,8 +201,8 @@ class NewScenesOccDataset(NewScenesDataset):
             for i, name in enumerate(self.class_names):
                 class_names[i + 1] = self.class_names[i]
             
-            results = np.stack(results, axis=0).mean(0) # 平均结果
-            # results = np.vstack((results[-1], results[:-1])) # 调整列表位置确保首位是计算非空SSC指标 
+            results = np.stack(results, axis=0).mean(0) # average results
+            # results = np.vstack((results[-1], results[:-1])) # adjust list order if needed to ensure non-empty SSC metric first
 
             mean_ious = []
             

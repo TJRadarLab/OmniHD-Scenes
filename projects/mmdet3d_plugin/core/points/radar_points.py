@@ -26,7 +26,7 @@ class RadarPoints(BasePoints):
             tensor, points_dim=points_dim, attribute_dims=attribute_dims
         )
         self.rotation_axis = 2
-    #----------flip的时候对速度进行处理，速度已补偿并转到自车-----
+
     def flip(self, bev_direction="horizontal"):
         """Flip the boxes in BEV along given BEV direction."""
         if bev_direction == "horizontal":

@@ -4,7 +4,7 @@ import mmcv
 from mmdet.datasets.builder import PIPELINES
 from mmcv.parallel import DataContainer as DC
 import cv2
-#--------------填充成32的整倍数-----------
+# Pad dimensions to be multiples of a divisor (e.g., 32)
 @PIPELINES.register_module()
 class PadMultiViewImage(object):
     """Pad the multi-view image.
@@ -34,12 +34,12 @@ class PadMultiViewImage(object):
             padded_img = [mmcv.impad_to_multiple(
                 img, self.size_divisor, pad_val=self.pad_val) for img in results['img']]
         
-        results['ori_shape'] = [img.shape for img in results['img']] #---这里没变还是[(720,1280),..]
-        results['img'] = padded_img  #--替换成padding之后的图片（736,1280）------
-        results['img_shape'] = [img.shape for img in padded_img] #----[(736,1280),..]
-        results['pad_shape'] = [img.shape for img in padded_img]#----[(736,1280),..]
-        results['pad_fixed_size'] = self.size  #----这里是None----
-        results['pad_size_divisor'] = self.size_divisor #---这里是32---
+        results['ori_shape'] = [img.shape for img in results['img']]  # original image shapes
+        results['img'] = padded_img  # replace with padded images
+        results['img_shape'] = [img.shape for img in padded_img]  # shapes after padding
+        results['pad_shape'] = [img.shape for img in padded_img]  # pad shapes
+        results['pad_fixed_size'] = self.size  # fixed pad size (None if not used)
+        results['pad_size_divisor'] = self.size_divisor  # pad divisor (e.g., 32)
 
     def __call__(self, results):
         """Call function to pad images, masks, semantic segmentation maps.
@@ -49,7 +49,6 @@ class PadMultiViewImage(object):
             dict: Updated result dict.
         """
         self._pad_img(results)
-        # #-------------------debug真值投影 -----------------
        
         return results
 
@@ -60,7 +59,7 @@ class PadMultiViewImage(object):
         repr_str += f'pad_val={self.pad_val})'
         return repr_str
 
-#------------normalization，这里有些值还是负的--------
+# Normalization step (some values may be negative prior to normalization)
 @PIPELINES.register_module()
 class NormalizeMultiviewImage(object):
     """Normalize the image.
@@ -97,7 +96,7 @@ class NormalizeMultiviewImage(object):
         repr_str += f'(mean={self.mean}, std={self.std}, to_rgb={self.to_rgb})'
         return repr_str
 
-#-----------光度增强，这里做与不做应该区别不大,这里某些值超过255了-------------
+# Photometric distortion: optional augmentation; values may exceed 255
 @PIPELINES.register_module()
 class PhotoMetricDistortionMultiViewImage:
     """Apply photometric distortion to image sequentially, every transformation
@@ -198,7 +197,7 @@ class PhotoMetricDistortionMultiViewImage:
         return repr_str
 
 
-#---------------这里输入的input_dict中的meta_keys进行了修改，因为之前没有----
+# The input `results` dict's `meta_keys` was extended to include additional keys
 @PIPELINES.register_module()
 class CustomCollect3D(object):
     """Collect data from the loader relevant to the specific task.
@@ -257,8 +256,8 @@ class CustomCollect3D(object):
                             )):
         self.keys = keys
         self.meta_keys = meta_keys
-        #-----这里加入了所需要的meta_keys，比如'lidar2cam','prev_idx', 'next_idx','scene_token','can_bus'等
-        #-----這裏的scale_factor读进来的时候是1，好像没用到，后面resize的时候是一个前两位为0.8的单位阵---
+        # Add required meta_keys such as 'lidar2cam', 'prev_idx', 'next_idx', 'scene_token', 'can_bus', etc.
+        # Note: incoming 'scale_factor' may be 1.0; after resize it becomes a scaling matrix (e.g., 0.8 on fx/fy)
     def __call__(self, results):
         """Call function to collect keys in results. The keys in ``meta_keys``
         will be converted to :obj:`mmcv.DataContainer`.
@@ -291,7 +290,7 @@ class CustomCollect3D(object):
             f'(keys={self.keys}, meta_keys={self.meta_keys})'
 
 
-#------这里进行尺度缩放，这里是重点，因为lidar2img的参数相当于也变了，相当于fxfycxcy左乘了0.8-------
+# Random scaling of images. This also updates `lidar2img` and intrinsics (fx,fy) accordingly.
 @PIPELINES.register_module()
 class RandomScaleImageMultiViewImage(object):
     """Random scale the image
@@ -311,9 +310,9 @@ class RandomScaleImageMultiViewImage(object):
         Returns:
             dict: Updated result dict.
         """
-        rand_ind = np.random.permutation(range(len(self.scales)))[0] #---这里只有一个数，rand_ind=0---
-        rand_scale = self.scales[rand_ind] #--0.8---
-        #------y_size=[720,720,.....720]x_size=[1280,1280,...,1280]
+        rand_ind = np.random.permutation(range(len(self.scales)))[0]
+        rand_scale = self.scales[rand_ind]
+        # compute new sizes for each image based on the random scale
         y_size = [int(img.shape[0] * rand_scale) for img in results['img']]
         x_size = [int(img.shape[1] * rand_scale) for img in results['img']]
         scale_factor = np.eye(4)
@@ -322,11 +321,11 @@ class RandomScaleImageMultiViewImage(object):
         results['img'] = [mmcv.imresize(img, (x_size[idx], y_size[idx]), return_scale=False) for idx, img in
                           enumerate(results['img'])]
         if self.scale_lidar2img:
-        #------这里相当于在内参的前两位fxfy直接乘了这个scale系数，scale_factor为前两位是0.8的单位阵----
+            # update lidar2img by left-multiplying a scaling matrix (affects fx, fy)
             lidar2img = [scale_factor @ l2i for l2i in results['lidar2img']]
             results['lidar2img'] = lidar2img
-        results['img_shape'] = [img.shape for img in results['img']] #--这里是[(720,1280,3),(720,1280,3),...]
-        results['ori_shape'] = [img.shape for img in results['img']] #--这里是[(720,1280,3),(720,1280,3),...]
+        results['img_shape'] = [img.shape for img in results['img']]
+        results['ori_shape'] = [img.shape for img in results['img']]
 
 
 

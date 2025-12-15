@@ -42,17 +42,16 @@ class CustomNewScenesDataset(NewScenesDataset):
             dict: Training data dict of the corresponding index.
         """
         queue = []
-        index_list = list(range(index-self.queue_length, index))#---[19433, 19434, 19435]---
+        index_list = list(range(index-self.queue_length, index))
         random.shuffle(index_list)
         index_list = sorted(index_list[1:])
-        index_list.append(index)     #-----随机过去三帧中的两帧，队列总共3帧,这里是[19434, 19435,19436]------------
+        index_list.append(index)
         for i in index_list:
-            i = max(0, i) #---这里防止index是0,1,2时报错，也就是整个2万多关键帧的前3个--
-            input_dict = self.get_data_info(i) #--生成输入的input_dict-----
+            i = max(0, i)
+            input_dict = self.get_data_info(i)
             if input_dict is None:
                 return None
-            self.pre_pipeline(input_dict)  #---增加custom3d中img_fields等各个字段--
-#---根据pipeline中顺序进行数据读取增强组装等，生成img_metas,gt_bboxes_3d,gt_labels_3d,img四个DC----
+            self.pre_pipeline(input_dict)
             example = self.pipeline(input_dict) 
             if self.filter_empty_gt and \
                     (example is None or ~(example['gt_labels_3d']._data != -1).any()):
@@ -62,16 +61,14 @@ class CustomNewScenesDataset(NewScenesDataset):
 
 
     def union2one(self, queue):
-        imgs_list = [each['img'].data for each in queue]  #-----取出img中的三个所有图像tensor----
+        imgs_list = [each['img'].data for each in queue]
         metas_map = {}
         prev_scene_token = None
         prev_pos = None
         prev_angle = None
         for i, each in enumerate(queue):
-            metas_map[i] = each['img_metas'].data  #----取出对应的img_metas ----
-            #----这里应该是解决这几种情况，首先队列中的第一个肯定没有之前帧，-----
-            #-----------其次，如果有一帧是clip最后一帧，下一帧也是没有之前帧的---
-            #---------这里将pos和angle记录为和之前的差，没有前一帧就是0------
+            metas_map[i] = each['img_metas'].data
+            # Handle missing previous frames and scene boundaries; store relative pos/angle
             if metas_map[i]['scene_token'] != prev_scene_token:  
                 metas_map[i]['prev_bev_exists'] = False
                 prev_scene_token = metas_map[i]['scene_token']
@@ -83,12 +80,12 @@ class CustomNewScenesDataset(NewScenesDataset):
                 metas_map[i]['prev_bev_exists'] = True
                 tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                metas_map[i]['can_bus'][:3] -= prev_pos #-----这里相减----
-                metas_map[i]['can_bus'][-1] -= prev_angle #----这里相减----
+                metas_map[i]['can_bus'][:3] -= prev_pos
+                metas_map[i]['can_bus'][-1] -= prev_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
-        #-------------这里将队列中的img和所有img_metas合并到最后一个样本，也就是当前帧----
-        queue[-1]['img'] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)# -[3,6,3,736,1280]
+            # Merge images and image metas into the last sample (current frame)
+            queue[-1]['img'] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)
         queue[-1]['img_metas'] = DC(metas_map, cpu_only=True)
         queue = queue[-1]
         return queue
@@ -112,7 +109,7 @@ class CustomNewScenesDataset(NewScenesDataset):
                     from lidar to different cameras.
                 - ann_info (dict): Annotation info.
         """
-        info = self.data_infos[index]   #----这里是annos按时间排好顺序的-----19434
+        info = self.data_infos[index]
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(
             sample_idx=info['token'],
@@ -127,11 +124,11 @@ class CustomNewScenesDataset(NewScenesDataset):
             frame_idx=info['frame_idx'],
             timestamp=int(info['timestamp']) / 1e6,
         )
-        #-------加入radar数据------
+        # Add radar data if present
         if self.modality['use_radar']: 
             input_dict['radars'] = info['radars']
-        #------加入图像信息，包括图像路径，lidar2cam，lidar2img，cam内参,这里要注意加入畸变系数------
-        #------内参应用要注意，前视后视读取后已经变成一半尺寸，但是内参没变，lidar2img乘了系数------
+        # Add camera information (image paths, lidar2cam, lidar2img, intrinsics, distortion)
+        # Note: front/back cameras may be scaled (images resized), lidar2img should be adjusted accordingly
         if self.modality['use_camera']:
             image_paths = []
             lidar2img_rts = []
@@ -141,8 +138,8 @@ class CustomNewScenesDataset(NewScenesDataset):
             for cam_type, cam_info in info['cams'].items():
                 image_paths.append(cam_info['data_path'])
                 # obtain lidar to image transformation matrix
-    #---------等效于直接4*4求逆矩阵，这里的平移旋转外参在pkl文件时已经是考虑了不同时刻egopose---------------
-                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation']) #这个就是R矩阵
+                # compute inverse rotation and translation
+                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])
                 lidar2cam_t = cam_info[
                     'sensor2lidar_translation'] @ lidar2cam_r.T
                 lidar2cam_rt = np.eye(4)
@@ -151,7 +148,7 @@ class CustomNewScenesDataset(NewScenesDataset):
                 intrinsic = np.array(cam_info['cam_intrinsic'])
                 viewpad = np.eye(4)
                 viewpad[:intrinsic.shape[0], :intrinsic.shape[1]] = intrinsic
-                lidar2img_rt = (viewpad @ lidar2cam_rt.T) #--实际就是K*lidar2cam，这里lidar2cam_rt求逆才是第四行0001---
+                lidar2img_rt = (viewpad @ lidar2cam_rt.T)
                 lidar2img_rts.append(lidar2img_rt)
 
                 cam_intrinsics.append(viewpad)
@@ -196,7 +193,7 @@ class CustomNewScenesDataset(NewScenesDataset):
             return self.prepare_test_data(idx)
         while True:
 
-            data = self.prepare_train_data(idx)  #-----调到此函数----
+            data = self.prepare_train_data(idx) 
             if data is None:
                 idx = self._rand_another(idx)
                 continue

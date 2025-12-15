@@ -4,7 +4,6 @@ import torch
 from torch.utils.data import DistributedSampler as _DistributedSampler
 from .sampler import SAMPLER
 
-#--------------这里进行了修改
 @SAMPLER.register_module()
 class DistributedSampler(_DistributedSampler):
 
@@ -31,7 +30,7 @@ class DistributedSampler(_DistributedSampler):
         indices = (indices *
                    math.ceil(self.total_size / len(indices)))[:self.total_size]
         assert len(indices) == self.total_size
-        #--------------这里进行了修改-------------------
+
         # subsample
         per_replicas = self.total_size//self.num_replicas
         # indices = indices[self.rank:self.total_size:self.num_replicas]

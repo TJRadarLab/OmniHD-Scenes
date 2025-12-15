@@ -133,7 +133,7 @@ def class_tp_curve(md_list: DetectionMetricDataList,
         plt.savefig(savepath)
         plt.close()
 
-#-----------------带有index------
+# ----------------- with index ------
 class DetectionBox_modified(DetectionBox):
     def __init__(self, *args, token=None, visibility=None, index=None, **kwargs):
         '''
@@ -240,7 +240,7 @@ def exist_corners_in_image_but_not_all(box, intrinsic: np.ndarray, imsize: Tuple
     else:
         return False
 
-#-----------------读取真值---------------
+# ----------------- load ground truth ---------------
 def load_gt(nusc: NuScenes, eval_split: str, box_cls, verbose: bool = False):
     """
     Loads ground truth boxes from DB.
@@ -283,8 +283,8 @@ def load_gt(nusc: NuScenes, eval_split: str, box_cls, verbose: bool = False):
         # Check that you aren't trying to cheat :).
         assert len(nusc.sample_annotation) > 0, \
             'Error: You are trying to evaluate on the test set but you do not have the annotations!'
-    index_map = {} #-----------这里加入了index,从1开始-----
-    #---------循环每个场景，记录每个帧并且每个帧的索引index------
+    index_map = {}  # index added here, starting from 1
+    # iterate through each scene and assign an index to each frame
     for scene in nusc.scene:
         first_sample_token = scene['first_sample_token']
         sample = nusc.get('sample', first_sample_token)
@@ -330,7 +330,7 @@ def load_gt(nusc: NuScenes, eval_split: str, box_cls, verbose: bool = False):
                     attribute_name = attribute_map[attr_tokens[0]]
                 else:
                     raise Exception('Error: GT annotations must not have more than one attribute!')
-                #-----每一个都是DetectionBox_modified类
+                
                 sample_boxes.append(
                     box_cls(
                         token=sample_annotation_token,
@@ -391,7 +391,7 @@ def filter_eval_boxes_by_id(nusc: NuScenes,
 
     return eval_boxes
 
-#-------------根据可视程度过滤---------------
+# ------------- filter by visibility ---------------
 def filter_eval_boxes_by_visibility(
         ori_eval_boxes: EvalBoxes,
         visibility=None,
@@ -431,7 +431,7 @@ def filter_by_sample_token(ori_eval_boxes, valid_sample_tokens=[],  verbose=Fals
             eval_boxes.boxes.pop(sample_token)
     return eval_boxes
 
-#--------------每个目标在多个相机出现，把重复出现的目标列出来评估-----------
+# -------------- For targets appearing in multiple cameras, list duplicates for evaluation -----------
 def filter_eval_boxes_by_overlap(nusc: NuScenes,
                                  eval_boxes: EvalBoxes,
                                  verbose: bool = False) -> EvalBoxes:
@@ -457,11 +457,11 @@ def filter_eval_boxes_by_overlap(nusc: NuScenes,
         total += len(eval_boxes[sample_token])
         sample_record = nusc.get('sample', sample_token)
         filtered_boxes = []
-        for box in eval_boxes[sample_token]: #------每一个边界框-----
+        for box in eval_boxes[sample_token]:  # process each bounding box
             count = 0
-            for cam in cams:#---每一个相机
+            for cam in cams:  # iterate through each camera
                 '''
-                copy-paste form nuscens
+                copy-paste from nuscenes
                 '''
                 sample_data_token = sample_record['data'][cam]
                 sd_record = nusc.get('sample_data', sample_data_token)
@@ -551,17 +551,16 @@ class NuScenesEval_custom(NuScenesEval):
             os.makedirs(self.plot_dir)
 
         # Load data.
-        #------------反序列化预测值和真值---------------
+            # deserialize predictions and ground truth
         if verbose:
             print('Initializing nuScenes detection evaluation')
         self.pred_boxes, self.meta = load_prediction(self.result_path, self.cfg.max_boxes_per_sample, DetectionBox,
                                                      verbose=verbose)
         self.gt_boxes = load_gt(self.nusc, self.eval_set, DetectionBox_modified, verbose=verbose) #--DetectionBox_modified
-        #-----------暂时关闭，需要再打开---------------
         assert set(self.pred_boxes.sample_tokens) == set(self.gt_boxes.sample_tokens), \
             "Samples in split doesn't match samples in predictions."
 
-        # Add center distances.加入bbox与ego的距离---
+        # Add center distances (distance from box center to ego)
         self.pred_boxes = add_center_dist(nusc, self.pred_boxes)
         self.gt_boxes = add_center_dist(nusc, self.gt_boxes)
 
@@ -569,21 +568,21 @@ class NuScenesEval_custom(NuScenesEval):
 
         if verbose:
             print('Filtering predictions')
-        #--------------根据距离，点数等过滤掉一些pred和真值目标-------------------
+        # filter predictions and ground truth by distance, points per box, etc.
         self.pred_boxes = filter_eval_boxes(nusc, self.pred_boxes, self.cfg.class_range, verbose=verbose)
         if verbose:
             print('Filtering ground truth annotations')
         self.gt_boxes = filter_eval_boxes(nusc, self.gt_boxes, self.cfg.class_range, verbose=verbose)
-        #-----------这里改加入评估重复在多个相机出现的目标------------
+        # optionally filter detections that appear in multiple cameras (overlap test)
         if self.overlap_test:
             self.pred_boxes = filter_eval_boxes_by_overlap(self.nusc, self.pred_boxes)
 
             self.gt_boxes = filter_eval_boxes_by_overlap(self.nusc, self.gt_boxes, verbose=True)
 
-        self.all_gt = copy.deepcopy(self.gt_boxes) #----这里运行很慢--
+        self.all_gt = copy.deepcopy(self.gt_boxes)  # may be slow
         self.all_preds = copy.deepcopy(self.pred_boxes)
         self.sample_tokens = self.gt_boxes.sample_tokens
-        #-----------------这里在load_gt里每个DetectionBox_modified里加过一次-------------------
+        # index_map is also added in load_gt; build local mapping here too
         self.index_map = {}
         for scene in nusc.scene:
             first_sample_token = scene['first_sample_token']
@@ -623,7 +622,7 @@ class NuScenesEval_custom(NuScenesEval):
             self.pred_boxes = filter_by_sample_token(self.all_preds, valid_tokens)
         self.sample_tokens = self.gt_boxes.sample_tokens
 
-#---------------------------调用该处的评估---------------
+# --------------------------- call evaluation here ---------------
     def evaluate(self) -> Tuple[DetectionMetrics, DetectionMetricDataList]:
         """
         Performs the actual evaluation.
@@ -673,7 +672,7 @@ class NuScenesEval_custom(NuScenesEval):
         metrics.add_runtime(time.time() - start_time)
 
         return metrics, metric_data_list
-    #-----------绘制PR曲线------
+    # ----------- render PR curves ------
     def render(self, metrics: DetectionMetrics, md_list: DetectionMetricDataList) -> None:
         """
         Renders various PR and TP curves.

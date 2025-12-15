@@ -10,7 +10,6 @@ from .sampler import SAMPLER
 import random
 from IPython import embed
 
-#-----------------没看出区别------------------
 @SAMPLER.register_module()
 class DistributedGroupSampler(Sampler):
     """Sampler that restricts data loading to a subset of the dataset.

@@ -117,7 +117,6 @@ def draw_lidar_bbox3d_on_img(bboxes3d,
     pts_2d[:, 0] /= pts_2d[:, 2]
     pts_2d[:, 1] /= pts_2d[:, 2]
     imgfov_pts_2d = pts_2d[..., :2].reshape(num_bbox, 8, 2)
-    #--------判断是否在图像内部----------------
     mask = []
     for i in range(num_bbox):
         mask.append(

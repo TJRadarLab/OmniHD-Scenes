@@ -56,10 +56,10 @@ def evaluation_semantic(pred_occ, gt_occ, img_metas, class_num):
 
     for i in range(pred_occ.shape[0]):
         gt_i, pred_i = gt_occ[i].cpu().numpy(), pred_occ[i].cpu().numpy()   # gt_i:(37721, 4); pred_i:(200, 200, 16)
-        gt_i = gt_to_voxel(gt_i, img_metas) # 定义空Occ (200, 200, 16)
-        mask = (gt_i != 255) # 泊松重建填补的Occ不一定能够被最邻近匹配，因此会存在部分
+        gt_i = gt_to_voxel(gt_i, img_metas)
+        mask = (gt_i != 255)
         score = np.zeros((class_num, 3))
-        for j in range(class_num):  # class_num：17
+        for j in range(class_num):  # class_num: 17
             if j == 0: # class 0 for geometry IoU SSCIoU
                 score[j][0] += ((gt_i[mask] != 0) * (pred_i[mask] != 0)).sum()
                 score[j][1] += (gt_i[mask] != 0).sum()
@@ -78,10 +78,10 @@ def new_evaluation_semantic(pred_occ, gt_occ, img_metas, class_num):
 
     for i in range(pred_occ.shape[0]):
         gt_i, pred_i = gt_occ[i].cpu().numpy(), pred_occ[i].cpu().numpy()   # gt_i:(37721, 4); pred_i:(200, 200, 16)
-        # gt_i = gt_to_voxel(gt_i, img_metas) # 定义空Occ (200, 200, 16)
-        # mask = (gt_i != 255) # 泊松重建填补的Occ不一定能够被最邻近匹配，因此会存在部分
+        # gt_i = gt_to_voxel(gt_i, img_metas)
+        # mask = (gt_i != 255)
         score = np.zeros((class_num, 3))
-        for j in range(class_num):  # class_num：18
+        for j in range(class_num):  # class_num: 18
             if j == (class_num - 1): # class 0 for geometry IoU SSCIoU
                 score[j][0] += ((gt_i != j) * (pred_i != j)).sum()
                 score[j][1] += (gt_i != j).sum()
@@ -92,8 +92,7 @@ def new_evaluation_semantic(pred_occ, gt_occ, img_metas, class_num):
                 score[j][2] += (pred_i == j).sum()
 
         results.append(score)   # (18, 3)
-    # print('调试')
-    # results.insert(0, results.pop())    # 调整列表位置确保首位是计算非空SSC指标
+    # results.insert(0, results.pop())
     return np.stack(results, axis=0)
 
 def aug_evaluation_semantic(pred_occ, gt_occ, img_metas, class_num):
@@ -102,10 +101,10 @@ def aug_evaluation_semantic(pred_occ, gt_occ, img_metas, class_num):
 
     for i in range(pred_occ.shape[0]):
         gt_i, pred_i = gt_occ[i].cpu().numpy(), pred_occ[i].cpu().numpy()   # gt_i:(37721, 4); pred_i:(200, 200, 16)
-        # gt_i = gt_to_voxel(gt_i, img_metas) # 定义空Occ (200, 200, 16)
-        # mask = (gt_i != 255) # 泊松重建填补的Occ不一定能够被最邻近匹配，因此会存在部分
+        # gt_i = gt_to_voxel(gt_i, img_metas)
+        # mask = (gt_i != 255)
         score = np.zeros((class_num, 3))
-        for j in range(class_num):  # class_num：17
+        for j in range(class_num):  # class_num: 17
             if j == 0: # class 0 for geometry IoU SSCIoU
                 score[j][0] += ((gt_i != 0) * (pred_i != 0)).sum()
                 score[j][1] += (gt_i != 0).sum()

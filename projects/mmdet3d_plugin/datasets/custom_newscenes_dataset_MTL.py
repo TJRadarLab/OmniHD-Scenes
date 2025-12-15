@@ -42,17 +42,16 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
             dict: Training data dict of the corresponding index.
         """
         queue = []
-        index_list = list(range(index-self.queue_length, index))#---[19433, 19434, 19435]---
+        index_list = list(range(index-self.queue_length, index))
         random.shuffle(index_list)
         index_list = sorted(index_list[1:])
-        index_list.append(index)     #-----随机过去三帧中的两帧，队列总共3帧,这里是[19434, 19435,19436]------------
+        index_list.append(index)
         for i in index_list:
-            i = max(0, i) #---这里防止index是0,1,2时报错，也就是整个2万多关键帧的前3个--
-            input_dict = self.get_data_info(i) #--生成输入的input_dict-----
+            i = max(0, i)
+            input_dict = self.get_data_info(i)
             if input_dict is None:
                 return None
-            self.pre_pipeline(input_dict)  #---增加custom3d中img_fields等各个字段--
-#---根据pipeline中顺序进行数据读取增强组装等，生成img_metas,gt_bboxes_3d,gt_labels_3d,img四个DC----
+            self.pre_pipeline(input_dict)
             example = self.pipeline(input_dict) 
             if self.filter_empty_gt and \
                     (example is None or ~(example['gt_labels_3d']._data != -1).any()):
@@ -62,8 +61,8 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
 
 
     def union2one(self, queue):
-        imgs_list = [each['img'].data for each in queue]  #-----取出img中的三个所有图像tensor----
-        #-------加入多帧点云-------
+        imgs_list = [each['img'].data for each in queue]
+        # multi-frame points
         if 'points' in queue[0].keys():
             points_list = [each['points'] for each in queue]
         
@@ -72,14 +71,12 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
         prev_pos = None
         prev_angle = None
 
-        ego2global_transform_lst = [] #--加入ego pose---
+        ego2global_transform_lst = []  # add ego pose list
 
         for i, each in enumerate(queue):
-            metas_map[i] = each['img_metas'].data  #----取出对应的img_metas ----
-            ego2global_transform_lst.append(metas_map[i]['ego2global_transformation'])#--加入ego pose--
-            #----这里应该是解决这几种情况，首先队列中的第一个肯定没有之前帧，-----
-            #-----------其次，如果有一帧是clip最后一帧，下一帧也是没有之前帧的---
-            #---------这里将pos和angle记录为和之前的差，没有前一帧就是0------
+            metas_map[i] = each['img_metas'].data
+            ego2global_transform_lst.append(metas_map[i]['ego2global_transformation'])
+            # Handle missing previous frames and scene boundaries; store relative pos/angle
             if metas_map[i]['scene_token'] != prev_scene_token:  
                 metas_map[i]['prev_bev_exists'] = False
                 prev_scene_token = metas_map[i]['scene_token']
@@ -91,24 +88,23 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
                 metas_map[i]['prev_bev_exists'] = True
                 tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                metas_map[i]['can_bus'][:3] -= prev_pos #-----这里相减----
-                metas_map[i]['can_bus'][-1] -= prev_angle #----这里相减----
+                metas_map[i]['can_bus'][:3] -= prev_pos
+                metas_map[i]['can_bus'][-1] -= prev_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
-        #-------------这里将队列中的img和所有img_metas合并到最后一个样本，也就是当前帧----
-        queue[-1]['img'] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)# -[3,6,3,736,1280]
+            # Merge queue images and img_metas into the last entry (current frame)
+            queue[-1]['img'] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)
 
-        #----------加入points----------------
+        # add points if present
         if 'points' in queue[0].keys():
             queue[-1]['points'] = points_list
-        #-----------------------------------
-        # add ego2global transformation metas_map最后一个加入ego pose list
+        # add ego2global transformation list to the last meta
         metas_map[len(queue)-1]["ego2global_transform_lst"] = ego2global_transform_lst
 
         queue[-1]['img_metas'] = DC(metas_map, cpu_only=True)
-        queue = queue[-1] #----这里如果有点云的话可以不取最后一个出来。
+        queue = queue[-1]  # keep only last frame (current);
         return queue
-    #-------------测试时只输入单帧的数据--------------
+    # during testing only single-frame input is used
     def get_data_info(self, index):
         """Get data info according to the given index.
 
@@ -128,14 +124,14 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
                     from lidar to different cameras.
                 - ann_info (dict): Annotation info.
         """
-        info = self.data_infos[index]   #----这里是annos按时间排好顺序的-----19434
+        info = self.data_infos[index]
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(
             sample_idx=info['token'],
             pts_filename=info['lidar_path'],
             sweeps=info['sweeps'],
 
-            lidar2ego_translation=info['lidar2ego_translation'], #---其实是单位阵--
+            lidar2ego_translation=info['lidar2ego_translation'],
             lidar2ego_rotation=info['lidar2ego_rotation'],
 
             ego2global_translation=info['ego2global_translation'],
@@ -147,13 +143,12 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
             frame_idx=info['frame_idx'],
             timestamp=int(info['timestamp']) / 1e6,
 
-            #----加入OCC相关----
-            
+            # occ related fields
             occ_path = info['occ_path'],
             occ_size = np.array(self.occ_size),
             pc_range = np.array(self.pc_range),
         )
-        #---------------------加入pose相关，newscenes中lidar/ego为相同坐标系，保持代码一致-------------------
+        # process pose related transforms; lidar and ego share same coords in newscenes
         lidar2ego_rotation = info['lidar2ego_rotation']
         lidar2ego_translation = info['lidar2ego_translation']
         ego2lidar = transform_matrix(translation=lidar2ego_translation, rotation=Quaternion(lidar2ego_rotation),
@@ -175,11 +170,11 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
         #------------------------------------------------------------
 
 
-        #-------加入radar数据------
+        # add radar data
         if self.modality['use_radar']: 
             input_dict['radars'] = info['radars']
-        #------加入图像信息，包括图像路径，lidar2cam，lidar2img，cam内参,这里要注意加入畸变系数------
-        #------内参应用要注意，前视后视读取后已经变成一半尺寸，但是内参没变，lidar2img乘了系数------
+        # add image info: image paths, lidar2cam, lidar2img, camera intrinsics; include distortion coeffs
+        # note: front/rear images may be resized (e.g. to half); intrinsics remain unchanged, so lidar2img should be scaled accordingly
         if self.modality['use_camera']:
             image_paths = []
             lidar2img_rts = []
@@ -189,8 +184,8 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
             for cam_type, cam_info in info['cams'].items():
                 image_paths.append(cam_info['data_path'])
                 # obtain lidar to image transformation matrix
-    #---------等效于直接4*4求逆矩阵，这里的平移旋转外参在pkl文件时已经是考虑了不同时刻egopose---------------
-                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation']) #这个就是R矩阵
+    # equivalent to the inverse of a 4x4 matrix; extrinsics in the pkl already account for ego-pose timing
+                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])  # rotation matrix R
                 lidar2cam_t = cam_info[
                     'sensor2lidar_translation'] @ lidar2cam_r.T
                 lidar2cam_rt = np.eye(4)
@@ -199,7 +194,7 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
                 intrinsic = np.array(cam_info['cam_intrinsic'])
                 viewpad = np.eye(4)
                 viewpad[:intrinsic.shape[0], :intrinsic.shape[1]] = intrinsic
-                lidar2img_rt = (viewpad @ lidar2cam_rt.T) #--实际就是K*lidar2cam，这里lidar2cam_rt求逆才是第四行0001---
+                lidar2img_rt = (viewpad @ lidar2cam_rt.T)  # effectively K * lidar2cam; inverse of lidar2cam_rt yields homogeneous row [0,0,0,1]
                 lidar2img_rts.append(lidar2img_rt)
 
                 cam_intrinsics.append(viewpad)
@@ -244,69 +239,9 @@ class CustomNewScenesDataset_MTL(NewScenesDataset_MTL):
             return self.prepare_test_data(idx)
         while True:
 
-            data = self.prepare_train_data(idx)  #-----调到此函数----
+            data = self.prepare_train_data(idx) 
             if data is None:
                 idx = self._rand_another(idx)
                 continue
             return data
 
-
-
-
-    # def _evaluate_single(self,
-    #                      result_path,
-    #                      logger=None,
-    #                      metric='bbox',
-    #                      result_name='pts_bbox'):
-    #     """Evaluation for a single model in nuScenes protocol.
-
-    #     Args:
-    #         result_path (str): Path of the result file.
-    #         logger (logging.Logger | str | None): Logger used for printing
-    #             related information during evaluation. Default: None.
-    #         metric (str): Metric name used for evaluation. Default: 'bbox'.
-    #         result_name (str): Result name in the metric prefix.
-    #             Default: 'pts_bbox'.
-
-    #     Returns:
-    #         dict: Dictionary of evaluation details.
-    #     """
-    #     from nuscenes import NuScenes
-    #     self.nusc = NuScenes(version=self.version, dataroot=self.data_root,
-    #                          verbose=True)
-
-    #     output_dir = osp.join(*osp.split(result_path)[:-1])
-
-    #     eval_set_map = {
-    #         'v1.0-mini': 'mini_val',
-    #         'v1.0-trainval': 'val',
-    #     }
-    #     self.nusc_eval = NuScenesEval_custom(
-    #         self.nusc,
-    #         config=self.eval_detection_configs,
-    #         result_path=result_path,
-    #         eval_set=eval_set_map[self.version], #---val---
-    #         output_dir=output_dir,
-    #         verbose=True,
-    #         overlap_test=self.overlap_test, #---这俩新加入
-    #         data_infos=self.data_infos #---#---这俩新加入
-    #     )
-    #     self.nusc_eval.main(plot_examples=0, render_curves=False)
-    #     # record metrics
-    #     metrics = mmcv.load(osp.join(output_dir, 'metrics_summary.json'))
-    #     detail = dict()
-    #     metric_prefix = f'{result_name}_NuScenes'
-    #     for name in self.CLASSES:
-    #         for k, v in metrics['label_aps'][name].items():
-    #             val = float('{:.4f}'.format(v))
-    #             detail['{}/{}_AP_dist_{}'.format(metric_prefix, name, k)] = val
-    #         for k, v in metrics['label_tp_errors'][name].items():
-    #             val = float('{:.4f}'.format(v))
-    #             detail['{}/{}_{}'.format(metric_prefix, name, k)] = val
-    #         for k, v in metrics['tp_errors'].items():
-    #             val = float('{:.4f}'.format(v))
-    #             detail['{}/{}'.format(metric_prefix,
-    #                                   self.ErrNameMapping[k])] = val
-    #     detail['{}/NDS'.format(metric_prefix)] = metrics['nd_score']
-    #     detail['{}/mAP'.format(metric_prefix)] = metrics['mean_ap']
-    #     return detail

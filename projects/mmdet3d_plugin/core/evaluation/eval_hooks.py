@@ -25,7 +25,7 @@ def _calc_dynamic_intervals(start_interval, dynamic_interval_list):
         [dynamic_interval[1] for dynamic_interval in dynamic_interval_list])
     return dynamic_milestones, dynamic_intervals
 
-#-----------这里还没仔细看区别-----------
+
 class CustomDistEvalHook(BaseDistEvalHook):
 
     def __init__(self, *args, dynamic_intervals=None,  **kwargs):

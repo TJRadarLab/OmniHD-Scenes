@@ -14,7 +14,7 @@ from .models.utils import *
 from .models.opt.adamw import AdamW2
 from .bevformer import *
 from .dd3d import *
-#----加入bevfuison，rcfusion panoocc---
+
 from .bevfusion import * 
 from .rcfusion import *
 from .ops.bev_pool import *

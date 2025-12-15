@@ -1,4 +1,3 @@
-# Copyright (c) OpenMMLab. All rights reserved.
 import torch
 from mmcv.cnn import build_norm_layer
 from mmcv.runner import force_fp32
@@ -8,7 +7,6 @@ from mmdet3d.ops import DynamicScatter
 from mmdet3d.models.builder import VOXEL_ENCODERS
 from .utils import PFNLayer, get_paddings_indicator,PFNLayer_Radar,PFNLayer_RadarV2,PFNLayer_Radar_vod
 
-#---x y z vx_r_comp vy_r_comp, power,snr,
 @VOXEL_ENCODERS.register_module()
 class RadarPillarFeatureNet(nn.Module):
     """Pillar Feature Net.
@@ -47,7 +45,7 @@ class RadarPillarFeatureNet(nn.Module):
                  point_cloud_range=(0, -40, -3, 70.4, 40, 1),
                  norm_cfg=dict(type='BN1d', eps=1e-3, momentum=0.01),
                  mode='max',
-                 legacy=True, ##  false为默认的
+                 legacy=True, 
                  with_velocity_snr_center=True):
         super(RadarPillarFeatureNet, self).__init__()
         assert len(feat_channels) > 0
@@ -61,11 +59,10 @@ class RadarPillarFeatureNet(nn.Module):
         if with_velocity_snr_center:
             in_channels += 4
         self._with_distance = with_distance
-        self._with_cluster_center = with_cluster_center  # 点中心
-        self._with_voxel_center = with_voxel_center  # voxel中心
+        self._with_cluster_center = with_cluster_center
+        self._with_voxel_center = with_voxel_center
         self._with_velocity_snr_center = with_velocity_snr_center
         self.fp16_enabled = False
-        # Create PillarFeatureNet layers
         self.in_channels = in_channels
         feat_channels = [in_channels] + list(feat_channels)
         pfn_layers = []
@@ -75,7 +72,7 @@ class RadarPillarFeatureNet(nn.Module):
             if i < len(feat_channels) - 2:
                 last_layer = False
             else:
-                last_layer = True  # 只有一层
+                last_layer = True
             pfn_layers.append(
                 PFNLayer_Radar(
                     in_filters,
@@ -85,7 +82,6 @@ class RadarPillarFeatureNet(nn.Module):
                     mode=mode))
         self.pfn_layers = nn.ModuleList(pfn_layers)
 
-        # Need pillar (voxel) size and x/y offset in order to calculate offset
         self.vx = voxel_size[0]
         self.vy = voxel_size[1]
         self.x_offset = self.vx / 2 + point_cloud_range[0]
@@ -105,29 +101,27 @@ class RadarPillarFeatureNet(nn.Module):
         Returns:
             torch.Tensor: Features of pillars.
         """
-        
+
         features_ls = [features]
-        # Find distance of x, y, and z from cluster center
         if self._with_cluster_center:
             points_mean = features[:, :, :3].sum(
                 dim=1, keepdim=True) / num_points.type_as(features).view(
-                    -1, 1, 1)  # 每个非空pillar的均值xyz
-            f_cluster = features[:, :, :3] - points_mean  # 所有点和均值的差包括补充的零点
+                    -1, 1, 1)
+            f_cluster = features[:, :, :3] - points_mean
             features_ls.append(f_cluster)
 
-        # Find distance of x, y, and z from pillar center
         dtype = features.dtype
         if self._with_voxel_center:
             if not self.legacy:
-                f_center = torch.zeros_like(features[:, :, :2])  # 这里coor好像是bzyx
+                f_center = torch.zeros_like(features[:, :, :2])
                 f_center[:, :, 0] = features[:, :, 0] - (
-                    coors[:, 3].to(dtype).unsqueeze(1) * self.vx +  # ：，：，3可以相减，对应每个voxel中心，包括补充的0点
+                    coors[:, 3].to(dtype).unsqueeze(1) * self.vx +
                     self.x_offset)
                 f_center[:, :, 1] = features[:, :, 1] - (
                     coors[:, 2].to(dtype).unsqueeze(1) * self.vy +
                     self.y_offset)
             else:
-                f_center = features[:, :, :2]   # 这里是trick，改变了前两维特征变成了局部xy，相对于voxel中心
+                f_center = features[:, :, :2]
                 f_center[:, :, 0] = f_center[:, :, 0] - (
                     coors[:, 3].type_as(features).unsqueeze(1) * self.vx +
                     self.x_offset)
@@ -146,24 +140,19 @@ class RadarPillarFeatureNet(nn.Module):
                     -1, 1, 1)
             velocity_snr_center = features[:, :, 3:7] - velocity_snr_mean
             features_ls.append(velocity_snr_center)
-        # Combine together feature decorations
-        features = torch.cat(features_ls, dim=-1)  # 最里面一维接起来（xyz v_xv_y power snr XcYcZcXpYp Vcx Vcy Powerc  SNRc）[X,10,16]
-        # The feature decorations were calculated without regard to whether
-        # pillar was empty. Need to ensure that
-        # empty pillars remain set to zeros.
-        voxel_count = features.shape[1]  # maxpoints
-        mask = get_paddings_indicator(num_points, voxel_count, axis=0)  # 接起来的特征有的是0点的，需要把这些再归成0
+
+        features = torch.cat(features_ls, dim=-1)
+        voxel_count = features.shape[1]
+        mask = get_paddings_indicator(num_points, voxel_count, axis=0)
         mask = torch.unsqueeze(mask, -1).type_as(features)
-        features *= mask  #  这里无效点特征都会是0
+        features *= mask
 
         for pfn in self.pfn_layers:
             features = pfn(features, num_points)
 
         return features.squeeze()
-    
 
 
-#---x y z vx_r_comp vy_r_comp, power,snr,
 @VOXEL_ENCODERS.register_module()
 class RadarPillarFeatureNetV2(nn.Module):
     """Pillar Feature Net.
@@ -202,7 +191,7 @@ class RadarPillarFeatureNetV2(nn.Module):
                  point_cloud_range=(0, -40, -3, 70.4, 40, 1),
                  norm_cfg=dict(type='BN1d', eps=1e-3, momentum=0.01),
                  mode='max',
-                 legacy=True, ##  false为默认的
+                 legacy=True,
                  with_velocity_snr_center=True):
         super(RadarPillarFeatureNetV2, self).__init__()
         assert len(feat_channels) > 0
@@ -216,11 +205,10 @@ class RadarPillarFeatureNetV2(nn.Module):
         if with_velocity_snr_center:
             in_channels += 4
         self._with_distance = with_distance
-        self._with_cluster_center = with_cluster_center  # 点中心
-        self._with_voxel_center = with_voxel_center  # voxel中心
+        self._with_cluster_center = with_cluster_center
+        self._with_voxel_center = with_voxel_center
         self._with_velocity_snr_center = with_velocity_snr_center
         self.fp16_enabled = False
-        # Create PillarFeatureNet layers
         self.in_channels = in_channels
         feat_channels = [in_channels] + list(feat_channels)
         pfn_layers = []
@@ -230,7 +218,7 @@ class RadarPillarFeatureNetV2(nn.Module):
             if i < len(feat_channels) - 2:
                 last_layer = False
             else:
-                last_layer = True  # 只有一层
+                last_layer = True
             pfn_layers.append(
                 PFNLayer_RadarV2(
                     in_filters,
@@ -240,7 +228,6 @@ class RadarPillarFeatureNetV2(nn.Module):
                     mode=mode))
         self.pfn_layers = nn.ModuleList(pfn_layers)
 
-        # Need pillar (voxel) size and x/y offset in order to calculate offset
         self.vx = voxel_size[0]
         self.vy = voxel_size[1]
         self.x_offset = self.vx / 2 + point_cloud_range[0]
@@ -259,29 +246,27 @@ class RadarPillarFeatureNetV2(nn.Module):
 
         Returns:
             torch.Tensor: Features of pillars.
-        """#---x y z vx_r_comp vy_r_comp,snr
+        """
         features_ls = [features]
-        # Find distance of x, y, and z from cluster center
         if self._with_cluster_center:
             points_mean = features[:, :, :3].sum(
                 dim=1, keepdim=True) / num_points.type_as(features).view(
-                    -1, 1, 1)  # 每个非空pillar的均值xyz
-            f_cluster = features[:, :, :3] - points_mean  # 所有点和均值的差包括补充的零点
+                    -1, 1, 1)
+            f_cluster = features[:, :, :3] - points_mean
             features_ls.append(f_cluster)
 
-        # Find distance of x, y, and z from pillar center
         dtype = features.dtype
         if self._with_voxel_center:
             if not self.legacy:
-                f_center = torch.zeros_like(features[:, :, :2])  # 这里coor好像是bzyx
+                f_center = torch.zeros_like(features[:, :, :2])
                 f_center[:, :, 0] = features[:, :, 0] - (
-                    coors[:, 3].to(dtype).unsqueeze(1) * self.vx +  # ：，：，3可以相减，对应每个voxel中心，包括补充的0点
+                    coors[:, 3].to(dtype).unsqueeze(1) * self.vx +
                     self.x_offset)
                 f_center[:, :, 1] = features[:, :, 1] - (
                     coors[:, 2].to(dtype).unsqueeze(1) * self.vy +
                     self.y_offset)
             else:
-                f_center = features[:, :, :2]   # 这里是trick，改变了前两维特征变成了局部xy，相对于voxel中心
+                f_center = features[:, :, :2]
                 f_center[:, :, 0] = f_center[:, :, 0] - (
                     coors[:, 3].type_as(features).unsqueeze(1) * self.vx +
                     self.x_offset)
@@ -300,21 +285,18 @@ class RadarPillarFeatureNetV2(nn.Module):
                     -1, 1, 1)
             velocity_snr_center = features[:, :, 3:6] - velocity_snr_mean
             features_ls.append(velocity_snr_center)
-        # Combine together feature decorations
-        features = torch.cat(features_ls, dim=-1)  # 最里面一维接起来（xyz v_xv_y snr XcYcZcXpYp Vcx Vcy SNRc）[X,10,14]
-        # The feature decorations were calculated without regard to whether
-        # pillar was empty. Need to ensure that
-        # empty pillars remain set to zeros.
-        voxel_count = features.shape[1]  # maxpoints
-        mask = get_paddings_indicator(num_points, voxel_count, axis=0)  # 接起来的特征有的是0点的，需要把这些再归成0
+
+        features = torch.cat(features_ls, dim=-1)
+        voxel_count = features.shape[1]
+        mask = get_paddings_indicator(num_points, voxel_count, axis=0)
         mask = torch.unsqueeze(mask, -1).type_as(features)
-        features *= mask  #  这里无效点特征都会是0
+        features *= mask
 
         for pfn in self.pfn_layers:
             features = pfn(features, num_points)
 
         return features.squeeze()
-    
+
 
 @VOXEL_ENCODERS.register_module()
 class PillarFeatureNetV1(nn.Module):
@@ -368,7 +350,6 @@ class PillarFeatureNetV1(nn.Module):
         self._with_cluster_center = with_cluster_center
         self._with_voxel_center = with_voxel_center
         self.fp16_enabled = False
-        # Create PillarFeatureNet layers
         self.in_channels = in_channels
         feat_channels = [in_channels] + list(feat_channels)
         pfn_layers = []
@@ -388,7 +369,6 @@ class PillarFeatureNetV1(nn.Module):
                     mode=mode))
         self.pfn_layers = nn.ModuleList(pfn_layers)
 
-        # Need pillar (voxel) size and x/y offset in order to calculate offset
         self.vx = voxel_size[0]
         self.vy = voxel_size[1]
         self.x_offset = self.vx / 2 + point_cloud_range[0]
@@ -409,7 +389,6 @@ class PillarFeatureNetV1(nn.Module):
             torch.Tensor: Features of pillars.
         """
         features_ls = [features]
-        # Find distance of x, y, and z from cluster center
         if self._with_cluster_center:
             points_mean = features[:, :, :3].sum(
                 dim=1, keepdim=True) / num_points.type_as(features).view(
@@ -417,7 +396,6 @@ class PillarFeatureNetV1(nn.Module):
             f_cluster = features[:, :, :3] - points_mean
             features_ls.append(f_cluster)
 
-        # Find distance of x, y, and z from pillar center
         dtype = features.dtype
         if self._with_voxel_center:
             if not self.legacy:
@@ -442,11 +420,7 @@ class PillarFeatureNetV1(nn.Module):
             points_dist = torch.norm(features[:, :, :3], 2, 2, keepdim=True)
             features_ls.append(points_dist)
 
-        # Combine together feature decorations
         features = torch.cat(features_ls, dim=-1)
-        # The feature decorations were calculated without regard to whether
-        # pillar was empty. Need to ensure that
-        # empty pillars remain set to zeros.
         voxel_count = features.shape[1]
         mask = get_paddings_indicator(num_points, voxel_count, axis=0)
         mask = torch.unsqueeze(mask, -1).type_as(features)

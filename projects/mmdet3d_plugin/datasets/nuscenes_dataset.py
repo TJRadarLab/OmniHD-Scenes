@@ -28,7 +28,7 @@ class CustomNuScenesDataset(NuScenesDataset):
         self.overlap_test = overlap_test
         self.bev_size = bev_size
         
-    def prepare_train_data(self, index):#-----19436-----
+    def prepare_train_data(self, index):
         """
         Training data preparation.
         Args:
@@ -37,17 +37,17 @@ class CustomNuScenesDataset(NuScenesDataset):
             dict: Training data dict of the corresponding index.
         """
         queue = []
-        index_list = list(range(index-self.queue_length, index))#---[19433, 19434, 19435]---
+        index_list = list(range(index - self.queue_length, index))
         random.shuffle(index_list)
         index_list = sorted(index_list[1:])
-        index_list.append(index)     #-----随机过去三帧中的两帧，队列总共3帧,这里是[19434, 19435,19436]------------
+        index_list.append(index)  # sample two frames from previous three plus current frame
         for i in index_list:
-            i = max(0, i) #---这里防止index是0,1,2时报错，也就是整个2万多关键帧的前3个--
-            input_dict = self.get_data_info(i) #--生成输入的input_dict-----
+            i = max(0, i) 
+            input_dict = self.get_data_info(i)  # generate input_dict for this index
             if input_dict is None:
                 return None
-            self.pre_pipeline(input_dict)  #---增加custom3d中img_fields等各个字段--
-#---根据pipeline中顺序进行数据读取增强组装等，生成img_metas,gt_bboxes_3d,gt_labels_3d,img四个DC----
+            self.pre_pipeline(input_dict)  
+            # pipeline performs loading/augmentation to produce img_metas, gt_bboxes_3d, gt_labels_3d, img (as DC)
             example = self.pipeline(input_dict) 
             if self.filter_empty_gt and \
                     (example is None or ~(example['gt_labels_3d']._data != -1).any()):
@@ -57,16 +57,15 @@ class CustomNuScenesDataset(NuScenesDataset):
 
 
     def union2one(self, queue):
-        imgs_list = [each['img'].data for each in queue]  #-----取出img中的三个所有图像tensor----
+        imgs_list = [each['img'].data for each in queue]  # extract image tensors from each 'img'
         metas_map = {}
         prev_scene_token = None
         prev_pos = None
         prev_angle = None
         for i, each in enumerate(queue):
-            metas_map[i] = each['img_metas'].data  #----取出对应的img_metas ----
-            #----这里应该是解决这几种情况，首先队列中的第一个肯定没有之前帧，-----
-            #-----------其次，如果有一帧是clip最后一帧，下一帧也是没有之前帧的---
-            #---------这里将pos和angle记录为和之前的差，没有前一帧就是0------
+            metas_map[i] = each['img_metas'].data  # extract corresponding img_metas
+            # Handle cases where previous BEV does not exist (e.g., scene boundary or first frame)
+            # Record pos and angle as differences relative to previous frame; if no previous frame, set to 0
             if metas_map[i]['scene_token'] != prev_scene_token:  
                 metas_map[i]['prev_bev_exists'] = False
                 prev_scene_token = metas_map[i]['scene_token']
@@ -78,12 +77,12 @@ class CustomNuScenesDataset(NuScenesDataset):
                 metas_map[i]['prev_bev_exists'] = True
                 tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                metas_map[i]['can_bus'][:3] -= prev_pos #-----这里相减----
-                metas_map[i]['can_bus'][-1] -= prev_angle #----这里相减----
+                metas_map[i]['can_bus'][:3] -= prev_pos  # subtract previous position
+                metas_map[i]['can_bus'][-1] -= prev_angle  # subtract previous angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
-        #-------------这里将队列中的img和所有img_metas合并到最后一个样本，也就是当前帧----
-        queue[-1]['img'] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)# -[3,6,3,736,1280]
+        # combine imgs and img_metas from queue into the last entry (current frame)
+        queue[-1]['img'] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)
         queue[-1]['img_metas'] = DC(metas_map, cpu_only=True)
         queue = queue[-1]
         return queue
@@ -107,7 +106,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                     from lidar to different cameras.
                 - ann_info (dict): Annotation info.
         """
-        info = self.data_infos[index]   #----这里是annos按时间排好顺序的-----19434
+        info = self.data_infos[index]   # infos are sorted by timestamp
         # standard protocal modified from SECOND.Pytorch
         input_dict = dict(
             sample_idx=info['token'],
@@ -122,8 +121,8 @@ class CustomNuScenesDataset(NuScenesDataset):
             frame_idx=info['frame_idx'],
             timestamp=info['timestamp'] / 1e6,
         )
-        #------这里后期需要加入radar模态信息-------
-        #------加入图像信息，包括图像路径，lidar2cam，lidar2img，cam内参------
+        # radar modality can be added later
+        # add image information, including paths, lidar2cam, lidar2img, intrinsics
         if self.modality['use_camera']:
             image_paths = []
             lidar2img_rts = []
@@ -132,8 +131,8 @@ class CustomNuScenesDataset(NuScenesDataset):
             for cam_type, cam_info in info['cams'].items():
                 image_paths.append(cam_info['data_path'])
                 # obtain lidar to image transformation matrix
-    #---------等效于直接4*4求逆矩阵，这里的平移旋转外参在pkl文件时已经是考虑了不同时刻egopose---------------
-                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation']) #这个就是R矩阵
+                # Equivalent to inverse of 4x4; extrinsics in PKL already account for ego-pose timing
+                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])
                 lidar2cam_t = cam_info[
                     'sensor2lidar_translation'] @ lidar2cam_r.T
                 lidar2cam_rt = np.eye(4)
@@ -142,7 +141,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                 intrinsic = cam_info['cam_intrinsic']
                 viewpad = np.eye(4)
                 viewpad[:intrinsic.shape[0], :intrinsic.shape[1]] = intrinsic
-                lidar2img_rt = (viewpad @ lidar2cam_rt.T) #--实际就是K*lidar2cam，这里lidar2cam_rt求逆才是第四行0001---
+                lidar2img_rt = (viewpad @ lidar2cam_rt.T) # effectively K * lidar2cam; inverse yields homogeneous [0,0,0,1] row
                 lidar2img_rts.append(lidar2img_rt)
 
                 cam_intrinsics.append(viewpad)
@@ -157,18 +156,20 @@ class CustomNuScenesDataset(NuScenesDataset):
                 ))
 
         if not self.test_mode:
-            #---这里调用nuscenesdataset中的get_ann_info，input_dict加入anno，包括gt_lables,gt_bboxes,gt_names，根据valid_flag过滤目标---
-            annos = self.get_ann_info(index)  
+            # call NuScenesDataset's get_ann_info to add annotations (gt_labels, gt_bboxes, gt_names)
+            # filtering may be applied based on valid_flag
+            annos = self.get_ann_info(index)
             input_dict['ann_info'] = annos
 
         rotation = Quaternion(input_dict['ego2global_rotation'])
         translation = input_dict['ego2global_translation']
-        #-------------这里还用到canbus，我们不需要，canbus中的旋转平移矩阵进行了替换------
-        #------------注意python赋值会直接影响原始数组,不影响需用copy.deepcopy------
+        # can_bus is used and modified here; assignment will affect original array
+        # use copy.deepcopy if you need to avoid modifying the source
         can_bus = input_dict['can_bus']
         can_bus[:3] = translation
         can_bus[3:7] = rotation
         #------这里得到全局下自车的yaw-------
+        # compute vehicle yaw in global frame (degrees then radians)
         patch_angle = quaternion_yaw(rotation) / np.pi * 180
         if patch_angle < 0:
             patch_angle += 360
@@ -176,8 +177,6 @@ class CustomNuScenesDataset(NuScenesDataset):
         can_bus[-1] = patch_angle
 
         return input_dict
-    #-----------这里的idx是所有训练样本中的某个索引，训练时是shuffle的---
-    #-----------这次idx是19436--------
     def __getitem__(self, idx):
         """Get item from infos according to the given index.
         Returns:
@@ -187,7 +186,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             return self.prepare_test_data(idx)
         while True:
 
-            data = self.prepare_train_data(idx)  #-----调到此函数----
+            data = self.prepare_train_data(idx)
             if data is None:
                 idx = self._rand_another(idx)
                 continue
@@ -228,8 +227,8 @@ class CustomNuScenesDataset(NuScenesDataset):
             eval_set=eval_set_map[self.version], #---val---
             output_dir=output_dir,
             verbose=True,
-            overlap_test=self.overlap_test, #---这俩新加入
-            data_infos=self.data_infos #---#---这俩新加入
+            overlap_test=self.overlap_test,  # these two params were newly added
+            data_infos=self.data_infos
         )
         self.nusc_eval.main(plot_examples=0, render_curves=False)
         # record metrics

@@ -61,7 +61,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
         "van":"car",
         "truck":"large_vehicle",
         "rider":"rider",
-        # 'cyclist':'rider',#----原来翻译成了cyclist这里兼容一下防止漏掉
+        # 'cyclist':'rider',
         "pedestrian":"pedestrian",
         "car":"car",
         "tricyclist":"car",
@@ -70,7 +70,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
         "engineering_vehicle":"large_vehicle",
         "handcart":"car",
         "trailer":"large_vehicle",
-        } #---与category_to_detection_name保持一致
+        }
     ErrNameMapping = {
         'trans_err': 'mATE',
         'scale_err': 'mASE',
@@ -79,7 +79,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
 
     }
     
-#-------------最终使用标签，这里按此顺序分配label，和配置文件一致-------------
+# Final class labels (order matches config)
     CLASSES = ('car', 'pedestrian', 'rider', 'large_vehicle')
     
     def __init__(self,
@@ -93,13 +93,13 @@ class NewScenesDataset_MTL(Custom3DDataset):
                  box_type_3d='LiDAR',
                  filter_empty_gt=True,
                  test_mode=False,
-                 eval_version='detection_newsc_config_final', #-----修改评估的配置文件
+                 eval_version='detection_newsc_config_final', # evaluation config version (modify if needed)
                  use_valid_flag=False,
-                 #------加入OCC需要的字段-----
-                 occ_size=[240, 160, 16], #--加入occ_size
-                 pc_range = [-60.0, -60.0, -3.0, 60.0, 60.0, 5.0],#-加入pc_range
-                 use_semantic = True,#--使用语义
-                 occ_class_names = None,#--OCC的类别
+                 # fields added for OCC support
+                 occ_size=[240, 160, 16],  # occupancy grid size
+                 pc_range=[-60.0, -60.0, -3.0, 60.0, 60.0, 5.0],  # point cloud range
+                 use_semantic=True,  # whether to use semantic labels for OCC
+                 occ_class_names=None,  # occupancy class names
 
                  ):
         self.load_interval = load_interval
@@ -116,8 +116,8 @@ class NewScenesDataset_MTL(Custom3DDataset):
 
         self.with_velocity = with_velocity
         self.eval_version = eval_version
-        from newscenes_devkit.eval.detection.config import config_factory #--
-        self.eval_detection_configs = config_factory(self.eval_version) #--这里可以根据需求进行修改eval文件
+        from newscenes_devkit.eval.detection.config import config_factory # --
+        self.eval_detection_configs = config_factory(self.eval_version) # -- can modify eval files as needed
         if self.modality is None:
             self.modality = dict(
                 use_camera=True,
@@ -132,7 +132,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
         self.use_semantic = use_semantic
         self.occ_class_names = occ_class_names
 
-#----------------------这里use_semantic保持兼容性---------------
+# keep compatibility with the use_semantic flag
     def prepare_train_data(self, index):
         """Training data preparation.
 
@@ -180,7 +180,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
             if name in self.CLASSES:
                 cat_ids.append(self.cat2id[name])
         return cat_ids
-#----------这里已经按照时间戳顺序排序----------
+# ---------- sorted by timestamp ----------
     def load_annotations(self, ann_file):
         """Load annotations from ann_file.
 
@@ -196,7 +196,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
         self.metadata = data['metadata']
         self.version = self.metadata['version']
         return data_infos
-#----------------------这里根据需求进行修改---------------
+
     def get_data_info(self, index):
         """Get data info according to the given index.
 
@@ -229,10 +229,10 @@ class NewScenesDataset_MTL(Custom3DDataset):
             pc_range = np.array(self.pc_range),
         )
 
-        #-------加入radar数据------
+        # add radar data
         if self.modality['use_radar']: 
             input_dict['radars'] = info['radars']
-        #------加入图像数据，这里要注意加入畸变系数------------
+        # add image data; include distortion coeffs
         if self.modality['use_camera']:
             image_paths = []
             lidar2img_rts = []
@@ -242,8 +242,8 @@ class NewScenesDataset_MTL(Custom3DDataset):
             for cam_type, cam_info in info['cams'].items():
                 image_paths.append(cam_info['data_path'])
                 # obtain lidar to image transformation matrix
-    #---------等效于直接4*4求逆矩阵，这里的平移旋转外参在pkl文件时已经是考虑了不同时刻egopose---------------
-                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation']) #这个就是R矩阵
+    # equivalent to inverse of 4x4; extrinsics in pkl already account for ego-pose timing
+                lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])  # rotation matrix R
                 lidar2cam_t = cam_info[
                     'sensor2lidar_translation'] @ lidar2cam_r.T
                 lidar2cam_rt = np.eye(4)
@@ -252,7 +252,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
                 intrinsic = np.array(cam_info['cam_intrinsic'])
                 viewpad = np.eye(4)
                 viewpad[:intrinsic.shape[0], :intrinsic.shape[1]] = intrinsic
-                lidar2img_rt = (viewpad @ lidar2cam_rt.T) #--实际就是K*lidar2cam，这里lidar2cam_rt求逆才是第四行0001---
+                lidar2img_rt = (viewpad @ lidar2cam_rt.T)  # effectively K * lidar2cam; inverse yields homogeneous [0,0,0,1] row
                 lidar2img_rts.append(lidar2img_rt)
 
                 cam_intrinsics.append(viewpad)
@@ -267,12 +267,12 @@ class NewScenesDataset_MTL(Custom3DDataset):
                     cam_distortion=cam_distortion,
                 ))
 
-        if not self.test_mode: #-----------这里控制是不是测试集无标签----
+        if not self.test_mode: # control whether the test set has no labels
             annos = self.get_ann_info(index)
             input_dict['ann_info'] = annos
 
         return input_dict
-    #---------------根据valid_flag过滤目标，加入速度，生成LiDARInstance3DBoxes的gt_bboxes_3d-------
+    # --------------- filter by valid_flag, add velocity, create LiDARInstance3DBoxes gt_bboxes_3d -------
     def get_ann_info(self, index):
         """Get annotation info according to the given index.
 
@@ -288,7 +288,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
                 - gt_names (list[str]): Class names of ground truths.
         """
         info = self.data_infos[index]
-        # -------是否根据visibility过滤-----
+        # ------- whether to filter by visibility (valid_flag) -----
         if self.use_valid_flag:
             mask = info['valid_flag']
         else:
@@ -299,19 +299,18 @@ class NewScenesDataset_MTL(Custom3DDataset):
         gt_labels_3d = []
         for cat in gt_names_3d:
             if cat in self.CLASSES:
-                gt_labels_3d.append(self.CLASSES.index(cat))  #----按顺序排列的标签---
+                gt_labels_3d.append(self.CLASSES.index(cat))  # label indices in order
             else:
-                gt_labels_3d.append(-1)  #---不在标签内的标签为-1--
+                gt_labels_3d.append(-1)  # labels not in CLASSES get -1
         gt_labels_3d = np.array(gt_labels_3d)
 
-        if self.with_velocity: #----np.nan的速度全部赋值0----------
+        if self.with_velocity:  # assign 0 to np.nan velocities
             gt_velocity = info['gt_velocity'][mask]
             nan_mask = np.isnan(gt_velocity[:, 0])
             gt_velocity[nan_mask] = [0.0, 0.0]   
-            gt_bboxes_3d = np.concatenate([gt_bboxes_3d, gt_velocity], axis=-1) #----bbox和速度拼在一起
+            gt_bboxes_3d = np.concatenate([gt_bboxes_3d, gt_velocity], axis=-1)  # concatenate bbox and velocity
 
-        # the nuscenes box center is [0.5, 0.5, 0.5], we change it to be
-        # the same as KITTI (0.5, 0.5, 0)转换到底边中点，在lidar/ego下-----
+        # the nuscenes box center is [0.5, 0.5, 0.5]; convert to KITTI convention (0.5,0.5,0) bottom-center in lidar/ego coords
         gt_bboxes_3d = LiDARInstance3DBoxes(
             gt_bboxes_3d,
             box_dim=gt_bboxes_3d.shape[-1],
@@ -322,7 +321,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
             gt_labels_3d=gt_labels_3d, #--array([class_id])
             gt_names=gt_names_3d) #--array([class_name])
         return anns_results
-#-----------转成newsc评估的格式，生成ego/lidar下的预测结果，并根据newsc_detection_config.json过滤-------------
+# ----------- Convert to NewScenes evaluation format, generate ego/lidar predictions, and filter using newsc_detection_config.json -------------
     def _format_bbox(self, results, jsonfile_prefix=None):
         """Convert the results to the standard format.
 
@@ -339,38 +338,38 @@ class NewScenesDataset_MTL(Custom3DDataset):
         mapped_class_names = self.CLASSES
 
         print('Start to convert detection format...')
-        #----------循环每一帧结果-------------------
+        # ---------- iterate over each frame's results -------------------
         for sample_id, det in enumerate(mmcv.track_iter_progress(results)):
             annos = []
-            boxes = output_to_newsc_box(det,mapped_class_names,self.eval_detection_configs)  #----将LiDARInstance3DBoxes转成newscbox并过滤一些范围外的----
+            boxes = output_to_newsc_box(det, mapped_class_names, self.eval_detection_configs)  # convert LiDARInstance3DBoxes to NewScenesBox and filter by range
             sample_token = self.data_infos[sample_id]['token']
 
-        #--------------没有设置动静属性标签--------------
+        # -------------- no static/dynamic attribute label set --------------
             for i, box in enumerate(boxes):
-                name = mapped_class_names[box.label]   #----cat2id----
-            #---------这里是最终的newsc格式---------
+                name = mapped_class_names[box.label]   # map class id to name
+        # --------- this is the final NewScenes format ---------
                 nusc_anno = dict(
-                    sample_token=sample_token, #---token
-                    translation=box.center.tolist(), #---lidar/ego坐标系中心点
-                    size=box.wlh.tolist(), #---wlh
-                    rotation=box.orientation.elements.tolist(), #----四元数
-                    velocity=box.velocity[:2].tolist(), #----vxvy
-                    detection_name=name, #----name
-                    detection_score=box.score, #---置信度
+                    sample_token=sample_token,  # token
+                    translation=box.center.tolist(),  # center in lidar/ego coords
+                    size=box.wlh.tolist(),  # width, length, height
+                    rotation=box.orientation.elements.tolist(),  # quaternion
+                    velocity=box.velocity[:2].tolist(),  # vx, vy
+                    detection_name=name,  # class name
+                    detection_score=box.score,  # confidence
                                     )
                 annos.append(nusc_anno)
             nusc_annos[sample_token] = annos
         nusc_submissions = {
             'meta': self.modality,
             'results': nusc_annos,
-        } #----------每一帧有200多个最初的检测结果，置信度由高到低排---
+        } # each frame may have 200+ initial detections, sorted by score descending
 
         mmcv.mkdir_or_exist(jsonfile_prefix)
         res_path = osp.join(jsonfile_prefix, 'results_newsc.json')
         print('Results writes to', res_path)
         mmcv.dump(nusc_submissions, res_path)
         return res_path
-    #--------------调用newsc的评估工具----------
+    # call NewScenes evaluation tools
     def _evaluate_single(self,
                          result_path,
                          logger=None,
@@ -408,7 +407,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
             verbose=True)
         newsc_eval.main(render_curves=False)
 
-        #-----测试的指标在metrics_summary中------------
+        # metrics are stored in metrics_summary.json
         metrics = mmcv.load(osp.join(output_dir, 'metrics_summary.json'))
         detail = dict()
         metric_prefix = f'{result_name}_NewScenes'
@@ -428,9 +427,8 @@ class NewScenesDataset_MTL(Custom3DDataset):
         detail['{}/mAP'.format(metric_prefix)] = metrics['mean_ap']
         return detail
     
-    #-----------将结果整理成标准的格式以评估------------
-    #-----------这里加入OCC后可能有所变化-------------
-    #-----------有可能在这里进行过滤黑天和雨天-----------
+    # convert results to standard format for evaluation
+    # note: with OCC integration this may change; can filter for night/rain here if desired
     #TODO
     def format_results(self, results, jsonfile_prefix=None):
         """Format the results to json (standard format for COCO evaluation).
@@ -447,8 +445,8 @@ class NewScenesDataset_MTL(Custom3DDataset):
                 directory created for saving json files when \
                 `jsonfile_prefix` is not specified.
         """
-        #-----{'bbox_results': bbox_results, 'occ_results': occ_results}-----
-        #----判断哪个task有results-----
+        # {'bbox_results': bbox_results, 'occ_results': occ_results}
+        # determine which tasks have results
         assert isinstance(results, dict), 'results must be a dict'
         if len(results['bbox_results']) != 0:
             assert len(results['bbox_results']) == len(self), (
@@ -465,7 +463,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
             jsonfile_prefix = osp.join(tmp_dir.name, 'results')
         else:
             tmp_dir = None
-        #-------这里是第二种格式--------------------
+        # alternate result format handling
         # currently the output prediction results could be in two formats
         # 1. list of dict('boxes_3d': ..., 'scores_3d': ..., 'labels_3d': ...)
         # 2. list of dict('pts_bbox' or 'img_bbox':
@@ -473,8 +471,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
         # this is a workaround to enable evaluation of both formats on newScenes
         # refer to https://github.com/open-mmlab/mmdetection3d/issues/449
         
-        #---------生成最终结果用于评估,3dOD存了json结果文件---------
-        #---------{'3dod':{'pts':xxx/xxx.json},'occ':[N个array]}-----
+        # generate final results for evaluation: 3dod json + occ arrays
         final_results = {'3dod':{},'occ':{}}
         if len(results['bbox_results']) != 0:
 
@@ -488,7 +485,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
                     results_ = [out[name] for out in results['bbox_results']]  #-----[dict('boxes_3d': ..., 'scores_3d': ..., 'labels_3d': ...)]
                     tmp_file_ = osp.join(jsonfile_prefix, name)
                     result_files.update(
-                        {name: self._format_bbox(results_, tmp_file_)}) #---这里调用生成nusc_submissions的json文件
+                        {name: self._format_bbox(results_, tmp_file_)}) # --- calls to generate nusc_submissions json file
             final_results['3dod'] = result_files
         #-----生成occ结果-----
         if len(results['occ_results']) != 0:
@@ -497,8 +494,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
         
         return final_results, tmp_dir
 
-#-------------这里加入OCC后要改-----------------
-#TODO
+# TODO: update OCC-related evaluation handling here if needed
     def evaluate(self,
                  results,
                  metric='bbox',
@@ -528,12 +524,12 @@ class NewScenesDataset_MTL(Custom3DDataset):
         Returns:
             dict[str, float]: Results of each evaluation metric.
         """
-        #--------------生成最终的json文件进行评估-----------------
+        # -------------- generate final json file for evaluation -----------------
         result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
 
         od_results_dict = dict()
         occ_results_dict = dict()
-        #----------------评估3d OD---------------------
+        # ---------------- evaluate 3D OD ---------------------
         if len(result_files['3dod']) != 0:
             print('------------Exit 3D OD Task, Now Evaluate 3d OD!--------------------')
 
@@ -549,7 +545,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
             if tmp_dir is not None:
                 tmp_dir.cleanup()
 
-        #----这里是OCC的评估，这里的result_files['occ']是一个list，每个元素是一个array
+        # ---- OCC evaluation: result_files['occ'] is a list, each element is an array
         if len(result_files['occ']) != 0:
             print('----------------------Exit OCC Task, Now Evaluate OCC!--------------------')
             
@@ -559,8 +555,8 @@ class NewScenesDataset_MTL(Custom3DDataset):
                 for i, name in enumerate(self.occ_class_names):
                     class_names[i + 1] = self.occ_class_names[i]
                 
-                results = np.stack(result_files['occ'], axis=0).mean(0) # 平均结果
-                # results = np.vstack((results[-1], results[:-1])) # 调整列表位置确保首位是计算非空SSC指标 
+                results = np.stack(result_files['occ'], axis=0).mean(0) # average results
+                # results = np.vstack((results[-1], results[:-1])) # adjust list order if needed to ensure non-empty SSC metric first
 
                 mean_ious = []
                 
@@ -586,7 +582,7 @@ class NewScenesDataset_MTL(Custom3DDataset):
 
 
 
-#-------------未改---------------------------------
+# ------------- not modified ---------------------------------
     def _build_default_pipeline(self):
         """Build the default pipeline for this dataset."""
         pipeline = [
@@ -607,8 +603,8 @@ class NewScenesDataset_MTL(Custom3DDataset):
             dict(type='Collect3D', keys=['points'])
         ]
         return Compose(pipeline)
-#-----------------------------------------------------------------------
-#-----------------这里还没修改-------------------------------------------------
+# -----------------------------------------------------------------------
+# ----------------- not modified yet -------------------------------------------------
     def show(self, results, out_dir, show=True, pipeline=None):
         """Results visualization.
 
@@ -640,8 +636,8 @@ class NewScenesDataset_MTL(Custom3DDataset):
                                                  Box3DMode.DEPTH)
             show_result(points, show_gt_bboxes, show_pred_bboxes, out_dir,
                         file_name, show)
-#----------------------------------------------------------------------------
-#---------------------------将mmdet3d预测结果转换成newscenes的格式---------------------
+# ----------------------------------------------------------------------------
+# --------------------------- Convert mmdet3d detection results to NewScenes format ---------------------
 def output_to_newsc_box(detection,classes,eval_configs):
     """Convert the output to the box class in the newScenes.
     Args:
@@ -658,29 +654,28 @@ def output_to_newsc_box(detection,classes,eval_configs):
     scores = detection['scores_3d'].numpy()
     labels = detection['labels_3d'].numpy()
 
-    box_gravity_center = box3d.gravity_center.numpy() #---BaseInstance3DBoxes默认底边中点转到中心点
-    box_dims = box3d.dims.numpy() #---[xsize, ysize, zsize],newsc是wlh
-    box_yaw = box3d.yaw.numpy() #--朝向角
+    box_gravity_center = box3d.gravity_center.numpy() # BaseInstance3DBoxes default bottom-center to center conversion
+    box_dims = box3d.dims.numpy() # [xsize, ysize, zsize], NewScenes expects wlh
+    box_yaw = box3d.yaw.numpy() # yaw angle
     # TODO: check whether this is necessary
     # with dir_offset & dir_limit in the head
-    #----这里再转回到newsc初始的时候，因为读进来的时候转换过一次以适配LiDARInstance3DBoxes
-    #-----这里有小于pi的值，-4.多,是否需要用limit_period
+    # Convert back for NewScenes original format; values may be outside [-pi,pi] so consider limit_period if necessary
     box_yaw = -box_yaw - np.pi / 2 
 
     box_list = []
     for i in range(len(box3d)):
-        #--yaw转换成四元数，需要注意的这个范围超了不会影响
+        # convert yaw to quaternion; range overflow should not affect result
         quat = pyquaternion.Quaternion(axis=[0, 0, 1], radians=box_yaw[i]) 
-        velocity = (*box3d.tensor[i, 7:9], 0.0) #--传入tensor不影响
+        velocity = (*box3d.tensor[i, 7:9], 0.0) # passing tensor is fine
         box = NewScenesBox(
             box_gravity_center[i],
             box_dims[i],
             quat,
-            label=labels[i],  #----------这个label要和classes中的顺序对应
+            label=labels[i],  
             score=scores[i],
             velocity=velocity)
-        cls_range_map = eval_configs.class_range #---不同类别的范围（可以根据标注的每类最远距离来确定）
-        det_range = cls_range_map[classes[box.label]] #---过滤掉ego坐标系下标注范围以外的目标,与评估一致---
+        cls_range_map = eval_configs.class_range # class range per category
+        det_range = cls_range_map[classes[box.label]] # filter out detections outside evaluation range in ego coordinates
         if abs(box.center[0])> det_range[0] or abs(box.center[1])> det_range[1]:
             continue
 
@@ -689,6 +684,6 @@ def output_to_newsc_box(detection,classes,eval_configs):
         #     continue
         
         box_list.append(box)
-    return box_list  #-----返回NewScenesBox实例，显示的是字符串所有信息
+    return box_list  # ----- return NewScenesBox instances with full info
 
 

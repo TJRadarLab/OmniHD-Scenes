@@ -29,7 +29,7 @@ class NMSFreeCoder(BaseBBoxCoder):
         self.pc_range = pc_range
         self.voxel_size = voxel_size
         self.post_center_range = post_center_range
-        self.max_num = max_num #---300---
+        self.max_num = max_num  # default example: 300
         self.score_threshold = score_threshold
         self.num_classes = num_classes
 
@@ -49,20 +49,20 @@ class NMSFreeCoder(BaseBBoxCoder):
         Returns:
             list[dict]: Decoded boxes.
         """
-        max_num = self.max_num  #------300
+        max_num = self.max_num
 
-        cls_scores = cls_scores.sigmoid() #---torch.Size([900, 10])，0-1之间
-        scores, indexs = cls_scores.view(-1).topk(max_num) #---选前300个
-        labels = indexs % self.num_classes  #----求余数得到排名前300的标签
-        bbox_index = indexs // self.num_classes #---相除得到对应的obj的索引,向下取整
-        bbox_preds = bbox_preds[bbox_index] #---对应的bbox回归值
-       #------------projects/mmdet3d_plugin/core/bbox/util.py解码边界框和速度----
-        #---解码之后[cx, cy, cz, w, l, h, rot, vx, vy]------
+        cls_scores = cls_scores.sigmoid()  # shape e.g. torch.Size([900, 10]), values in [0,1]
+        scores, indexs = cls_scores.view(-1).topk(max_num)  # select top `max_num` scores (e.g., top 300)
+        labels = indexs % self.num_classes  # labels = index % num_classes
+        bbox_index = indexs // self.num_classes  # bbox_index = index // num_classes (object index)
+        bbox_preds = bbox_preds[bbox_index]  # select corresponding bbox predictions
+        # decode boxes and velocities using util.denormalize_bbox
+        # decoded format: [cx, cy, cz, w, l, h, rot, vx, vy]
         final_box_preds = denormalize_bbox(bbox_preds, self.pc_range)   #--torch.Size([300, 9])
         final_scores = scores  #--torch.Size([300])
         final_preds = labels   #--torch.Size([300])
 
-        # use score threshold根据给定的分数阈值，不断降低阈值，直到至少有一个得分大于等于阈值，或者阈值降低到0.01以下
+        # use score threshold: lower threshold gradually until at least one score >= threshold or threshold < 0.01
         if self.score_threshold is not None:
             thresh_mask = final_scores > self.score_threshold
             tmp_score = self.score_threshold
@@ -72,7 +72,7 @@ class NMSFreeCoder(BaseBBoxCoder):
                     thresh_mask = final_scores > -1
                     break
                 thresh_mask = final_scores >= tmp_score
-        #-----保留中心点范围在设定范围内-------
+        # keep boxes whose centers are within the configured post_center_range
         if self.post_center_range is not None:
             self.post_center_range = torch.tensor(
                 self.post_center_range, device=scores.device)
@@ -112,7 +112,7 @@ class NMSFreeCoder(BaseBBoxCoder):
         Returns:
             list[dict]: Decoded boxes.
         """
-        #------这里取解码器的最后一层-------------
+        # use the last decoder layer's outputs
         all_cls_scores = preds_dicts['all_cls_scores'][-1] #---torch.Size([1, 900, 10])
         all_bbox_preds = preds_dicts['all_bbox_preds'][-1] #--torch.Size([1, 900, 10])
         

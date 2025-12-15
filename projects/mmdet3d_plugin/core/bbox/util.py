@@ -6,7 +6,7 @@ def normalize_bbox(bboxes, pc_range):
     cx = bboxes[..., 0:1]
     cy = bboxes[..., 1:2]
     cz = bboxes[..., 2:3]
-    w = bboxes[..., 3:4].log() #--e对数
+    w = bboxes[..., 3:4].log() 
     l = bboxes[..., 4:5].log()
     h = bboxes[..., 5:6].log()
 

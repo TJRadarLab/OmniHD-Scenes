@@ -13,7 +13,7 @@ from projects.mmdet3d_plugin.core.vis_tools import project_pts_on_img
 import torch
 from mmdet3d.core.points import BasePoints, get_points_type
 
-#----------------读取深度真值,按分辨率1080，1920读入------------------
+# Load ground-truth depth maps; read at resolution 1080x1920
 @PIPELINES.register_module()
 class LoadGTDepth(object):
     def __init__(self, 
@@ -32,9 +32,9 @@ class LoadGTDepth(object):
         filename = results['filename'].copy()
         for i, name in enumerate(filename):
             cam_depth = np.fromfile(name.replace("cameras","depth_gt")+".bin",
-                    dtype=np.float32,
-                    count=-1).reshape(-1, 3)
-        #----【u,v,d】
+                dtype=np.float32,
+                count=-1).reshape(-1, 3)
+        # [u, v, d]
             if name.split('/')[-2] == 'camera_front' or name.split('/')[-2] == 'camera_back':
                 cam_depth[:, :2] = cam_depth[:, :2] * self.scale_factor_frontandback
             #------------------
@@ -52,7 +52,7 @@ class LoadGTDepth(object):
                 depth_map = np.pad(depth_map, ((self.pad//2, self.pad//2), (0, 0)),'constant',constant_values = (0,0))
             gt_depths.append(torch.Tensor(depth_map))
         
-        gt_depths = torch.stack(gt_depths) #---6,1080,1920
+        gt_depths = torch.stack(gt_depths)  # shape: (6, 1080, 1920)
         results['img_depth'] = gt_depths
         return results
 
@@ -95,12 +95,11 @@ class LoadOccupancy_Newscenes(object):
     
     def __call__(self, results):
         occ = np.load(results['occ_path'])["occ_gt"]
-        occ = occ.astype(np.float32)    # (42319, 4); print(np.max(occ[...,-1])):16.0; print(np.min(occ[...,-1])):1.0
+        occ = occ.astype(np.float32)    # (42319, 4)
         # occ[...,-1] += 1
-        semantics = self.gt_to_voxel(occ, self.num_classes, self.occ_size) # 定义空Occ (200, 200, 16)
+        semantics = self.gt_to_voxel(occ, self.num_classes, self.occ_size)  # create empty occ voxel grid (200, 200, 16)
 
-        results['gt_occ'] = semantics # print(np.max(occ[...,-1])):17.0; print(np.min(occ[...,-1])):0.0 [0,17],共十八种
-        # print(np.sum(semantics==0))=597681； print(np.sum(semantics==17))=4754
+        results['gt_occ'] = semantics  # voxel semantic map in range [0, num_classes]
         return results
 
     def __repr__(self):
@@ -111,9 +110,9 @@ class LoadOccupancy_Newscenes(object):
 
 
 
-#--原始[x,y,z,velocity,power,motion_state,SNR,valid_flag]----
-#--生成的格式x y z vx_r_comp vy_r_comp, power,snr,time_diff,Vr[每个radar坐标下],radar_ID
-#-使用x y z vx_r_comp vy_r_comp, power,snr,time_diff补偿的速度，旋转到ego/lidar坐标系
+# Original format: [x, y, z, velocity, power, motion_state, SNR, valid_flag]
+# Output format: x, y, z, vx_r_comp, vy_r_comp, power, snr, time_diff, Vr (radial), radar_ID
+# We use compensated velocities (vx_r_comp, vy_r_comp) and rotate them into ego/lidar frame
 @PIPELINES.register_module()
 class LoadRadarPointsMultiSweeps(object):
     """Load radar points from multiple sweeps.
@@ -151,7 +150,7 @@ class LoadRadarPointsMultiSweeps(object):
         self.test_mode = test_mode
         self.pc_range = pc_range
 
-    #--------读取radar点云，bin文件,8维------------------
+    # Load radar point clouds from .bin files (8 dims)
     def _load_points(self, pts_filename):
         """Private function to load point clouds data.
 
@@ -244,43 +243,44 @@ class LoadRadarPointsMultiSweeps(object):
                 time_diff = ts - timestamp
                 time_diff = np.ones((points_sweep.shape[0], 1)) * time_diff
 
-    #---------------进行速度补偿并只用补偿后的速度，转到当前帧lidar/ego坐标系-------------            
-#-------------------相对径向速度和补偿后的速度投影到当前帧坐标系--------------------------
+    # Perform velocity compensation and use compensated velocities; transform to current frame (lidar/ego)
+    # Project relative radial velocity and compensated velocity into the current frame
                 # velocity compensated by the ego motion in sensor frame
-                # 提取 xyz 坐标和径向速度 vr
+                # extract xyz coordinates and radial velocity vr
                 xyz = points_sweep[:, :3]
                 vr = points_sweep[:, 3]
-                # 计算点的距离 r
+                # compute distance r
                 r = np.linalg.norm(xyz, axis=1)
 
-                # 计算方位角 azimuth
-                azimuth = np.arctan2(xyz[:, 1], xyz[:, 0]) #---- 前后视+-70/+-10
+                # compute azimuth
+                azimuth = np.arctan2(xyz[:, 1], xyz[:, 0])
 
-                # 计算仰角 elevation
-                elevation = np.arcsin(xyz[:, 2] / r) #--前后视+-12/+-5
+                # compute elevation
+                elevation = np.arcsin(xyz[:, 2] / r)
 
-                # 自车速度在radar方向分解
+                # decompose ego velocity into the sensor frame
                 V_ego = np.array(sweep['ego_velocity']).reshape(-1,3)
 
                 V_sensor = V_ego @ np.linalg.inv(Quaternion(sweep['sensor2ego_rotation']).rotation_matrix).T 
                 V_sensor = np.repeat(V_sensor,points_sweep.shape[0], axis=0)
-                # 计算自车传感器速度在径向速度 vr 方向上的分量进行速度补偿
+                # compute the component of the ego sensor velocity along radial direction for compensation
                 Vr_compensated = V_sensor[:,0] * np.cos(azimuth) * np.cos(elevation) + \
                     V_sensor[:,1] * np.sin(azimuth) * np.cos(elevation) + \
                         V_sensor[:,2] * np.sin(elevation) + vr
-                # 计算补偿后的x方向速度 Vx_compensated
+                # compute compensated x-direction velocity Vx_compensated
                 Vx_compensated = Vr_compensated * np.cos(elevation) * np.cos(azimuth) 
-                # 计算补偿后的y方向速度 Vy_compensated
+                # compute compensated y-direction velocity Vy_compensated
                 Vy_compensated = Vr_compensated * np.cos(elevation) * np.sin(azimuth)
 
                 velo_comp = np.concatenate((Vx_compensated.reshape(-1, 1), Vy_compensated.reshape(-1, 1)), axis=1)            
                 velo_comp = np.concatenate(
                     (velo_comp, np.zeros((velo_comp.shape[0], 1))), 1)
-                velo_comp = velo_comp @ sweep['sensor2lidar_rotation'].T  #---这里转到了当前帧lidar坐标系
+                # rotate velocities into the current-frame lidar coordinates
+                velo_comp = velo_comp @ sweep['sensor2lidar_rotation'].T
                 velo_comp = velo_comp[:, :2]
 
 
-#----------------------------点云转到当前坐标系--------------------------------
+# Transform points into the current frame
                 points_sweep[:, :3] = points_sweep[:, :3] @ sweep[
                     'sensor2lidar_rotation'].T
                 points_sweep[:, :3] += sweep['sensor2lidar_translation']
@@ -289,17 +289,17 @@ class LoadRadarPointsMultiSweeps(object):
                 points_sweep_ = np.concatenate(
                     [points_sweep[:, :3], 
                      velo_comp, points_sweep[:, [4,6]],
-                     time_diff,Vr_compensated.reshape(-1, 1),points_radarID], axis=1) #-使用x y z vx_r_comp vy_r_comp, power,snr,time_diff,Vr[每个radar坐标下],radar_ID
+                     time_diff,Vr_compensated.reshape(-1, 1),points_radarID], axis=1)  # format: x y z vx_r_comp vy_r_comp power snr time_diff Vr radar_ID
                 points_sweep_list.append(points_sweep_)
         
-        points = np.concatenate(points_sweep_list, axis=0) #---8000-20000
+        points = np.concatenate(points_sweep_list, axis=0)  # ~8000-20000 points
         
         points = points[:, self.use_dim]
         
         points = RadarPoints(
             points, points_dim=points.shape[-1], attribute_dims=None
         )
-        #-------------PointsRangeFilter放在这里，过滤范围外的点云------------------
+        
 
         
         radar_mask = points.in_range_3d(self.pc_range)
@@ -307,7 +307,7 @@ class LoadRadarPointsMultiSweeps(object):
 
 
 
-        results['points'] = clean_radar #---这里写成points----
+        results['points'] = clean_radar  # assign filtered radar points
 
         return results
 
@@ -316,7 +316,7 @@ class LoadRadarPointsMultiSweeps(object):
         return f'{self.__class__.__name__}(sweeps_num={self.sweeps_num})'
 
 
-#-----------这里lidar2img和内参都变掉-----------------
+
 @PIPELINES.register_module()
 class LoadMultiViewImageFromFiles_newsc(object):
     """Load multi channel images from a list of separate channel files.
@@ -328,7 +328,7 @@ class LoadMultiViewImageFromFiles_newsc(object):
             Defaults to False.
         color_type (str): Color type of the file. Defaults to 'unchanged'.
     """
-    #----PhotoMetricDistortionMultiViewImage需要to_float32-----
+
     def __init__(self, to_float32=False, color_type='unchanged'):
         self.to_float32 = to_float32
         self.color_type = color_type
@@ -352,9 +352,6 @@ class LoadMultiViewImageFromFiles_newsc(object):
                 - img_norm_cfg (dict): Normalization configuration of images.
         """
         filename = results['img_filename']
-        # img is of shape (h, w, c, num_views) （1080,1920,3,6）,前后视是3840*2160,读进来先去畸变-
-        #-----------这里读取6路图像，尺寸不一样大可以参考后面scale操作----------
-        # ----------在这里先scale掉前后视，lidar2img和原始内参也要对应改-------------
         img = []
         lidar2img = []
         cam_intrinsic = []
@@ -384,12 +381,12 @@ class LoadMultiViewImageFromFiles_newsc(object):
         results['lidar2img'] = lidar2img
         results['cam_intrinsic'] = cam_intrinsic
         if self.to_float32:
-            img = img.astype(np.float32) #--float32--
-        results['filename'] = filename  #---赋值filename字段---
+            img = img.astype(np.float32) 
+        results['filename'] = filename 
         # unravel to list, see `DefaultFormatBundle` in formating.py
         # which will transpose each image separately and then stack into array
-        results['img'] = [img[..., i] for i in range(img.shape[-1])] #--按顺序六个图像，(1080,1920,3)--
-        results['img_shape'] = img.shape  #---下面都是赋初始值字段----
+        results['img'] = [img[..., i] for i in range(img.shape[-1])] 
+        results['img_shape'] = img.shape  
         results['ori_shape'] = img.shape #----（1080,1920,3,6）
         # Set initial values for default meta_keys
         results['pad_shape'] = img.shape #----（1080,1920,3,6）
@@ -398,18 +395,8 @@ class LoadMultiViewImageFromFiles_newsc(object):
         results['img_norm_cfg'] = dict(
             mean=np.zeros(num_channels, dtype=np.float32),
             std=np.ones(num_channels, dtype=np.float32),
-            to_rgb=False) #------这里初始值是mean0,std1-------
-        
+            to_rgb=False) 
 
-        # #------------debug真值投影----------
-
-        # from .draw_box_on_img import draw_lidar_bbox3d_on_img
-        # for i in range(6):
-        #     img = results['img'][i]
-        #     img = img.copy()
-        #     img = draw_lidar_bbox3d_on_img(results['gt_bboxes_3d'], img, results['lidar2img'][i], None)
-        #     cv2.imwrite(f'/mnt/zhenglianqing/bevformer_noted/debug_some_imgresult/draw_box_debug/gt_bbox_to_img_{i}.jpg', img)
-        # #------------------------------------
         return results
 
     def __repr__(self):
@@ -420,7 +407,6 @@ class LoadMultiViewImageFromFiles_newsc(object):
         return repr_str
     
 
-#--------------降线束--------------------------------
 @PIPELINES.register_module()
 class LoadPointsFromFile_reducedbeams(object):
 
@@ -490,40 +476,9 @@ class LoadPointsFromFile_reducedbeams(object):
         points = self._load_points(pts_filename)
         points = points.reshape(-1, self.load_dim)
         points = points[:, self.use_dim]
-# #         #-----------------debug可视化----------------
-# #         #         #----debug保存---
-# #------------------------------------------------------------------
-#         import matplotlib.pyplot as plt
-
-#         # 生成示例数据
-#         fig, ax = plt.subplots(figsize=(16, 12)) 
-#         # 绘制散点图
-        
-#         ax.scatter(points[:, 0], points[:, 1], color='red', s=0.2, alpha=0.5, label='Lidar Points')  # 设置颜色为红色，点的大小为10
-#         ax.set_xlabel('X')
-#         ax.set_ylabel('Y')
-#         ax.set_title('Scatter Plot')
-#         ax.legend()  # 显示图例
-#         # 保存图像
-#         plt.savefig('/mnt/zhenglianqing/bevformer_noted/debug_some_imgresult/reduce_beam/points128_new.png',bbox_inches='tight', pad_inches=0.1, dpi=300)
-# #-----------------------------------------------------
         points = reduce_LiDAR_beams(points, self.reduce_beams_to, self.chosen_beam_id)
         
-# # #------------------------------------------------------------------
-#         import matplotlib.pyplot as plt
 
-#         # 生成示例数据
-#         fig, ax = plt.subplots(figsize=(16, 12)) 
-#         # 绘制散点图
-        
-#         ax.scatter(points[:, 0], points[:, 1], color='red', s=0.2, alpha=0.5, label='Lidar Points')  # 设置颜色为红色，点的大小为10
-#         ax.set_xlabel('X')
-#         ax.set_ylabel('Y')
-#         ax.set_title('Scatter Plot')
-#         ax.legend()  # 显示图例
-#         # 保存图像
-#         plt.savefig('/mnt/zhenglianqing/bevformer_noted/debug_some_imgresult/reduce_beam/points64_new.png',bbox_inches='tight', pad_inches=0.1, dpi=300)
-# #-----------------------------------------------------
         attribute_dims = None
 
         if self.shift_height:
@@ -563,7 +518,6 @@ class LoadPointsFromFile_reducedbeams(object):
         return repr_str
 
 
-#------修改以减少beam-------------
 def reduce_LiDAR_beams(pts, reduce_beams_to=32, chosen_beam_id=13):
     beam_range = [-25, -19.582, -16.042, -13.565, -11.742, -10.346, -9.244, -8.352, -7.65, -7.15, -6.85, -6.65, -6.5, -6.39, -6.29, -6.19, -6.09, -5.99, -5.89, -5.79, -5.69, -5.59, -5.49, -5.39, -5.29, -5.19, -5.09, -4.99, -4.89, -4.79, -4.69, -4.59, -4.49, -4.39, -4.29, -4.19, -4.09, -3.99, -3.89, -3.79, -3.69, -3.59, -3.49, -3.39, -3.29, -3.19, -3.09, -2.99, -2.89, -2.79, -2.69, -2.59, -2.49, -2.39, -2.29, -2.19, -2.09, -1.99, -1.89, -1.79, -1.69, -1.59, -1.49, -1.39, -1.29, -1.19, -1.09, -0.99, -0.89, -0.79, -0.69, -0.59, -0.49, -0.39, -0.29, -0.19, -0.09, 0.01, 0.11, 0.21, 0.31, 0.41, 0.51, 0.61, 0.71, 0.81, 0.91, 1.01, 1.11, 1.21, 1.31, 1.41, 1.51, 1.61, 1.71, 1.81, 1.91, 2.01, 2.11, 2.21, 2.31, 2.41, 2.51, 2.61, 2.71, 2.81, 2.91, 3.01, 3.11, 3.21, 3.31, 3.41, 3.51, 3.61, 3.71, 3.81, 3.96, 4.16, 4.41, 4.71, 5.06, 5.46, 5.96, 6.56, 7.41, 9, 11.5, 15]
     beam_range = np.radians(beam_range)
@@ -574,7 +528,6 @@ def reduce_LiDAR_beams(pts, reduce_beams_to=32, chosen_beam_id=13):
         [-0.019999, 0.9998, 0, 0],
         [0.017449, 0.000349, 0.999848, 1.855],
         [0, 0, 0, 1]])
-    #-----先转到lidar坐标系-------
     ego2lidar = np.linalg.inv(lidar2ego)
     pts = transform_points(pts, ego2lidar)
     #print(pts.size())
@@ -590,32 +543,24 @@ def reduce_LiDAR_beams(pts, reduce_beams_to=32, chosen_beam_id=13):
     num_pts, _ = pts.size()
     mask = torch.zeros(num_pts)
     if reduce_beams_to == 16:
-        # 从128个数中等间隔取16个
-        # 7, 15, 23, 31, 39, 47, 55, 63, 71, 79, 87, 95, 103, 111, 119, 127
         liat_16 = [7, 15, 23, 31, 39, 47, 55, 63, 71, 79, 87, 95, 103, 111, 119, 127]
         for id in liat_16:
             beam_mask = (theta < (beam_range[id-1]-0.000873)) * (theta > (beam_range[id]-0.000873))
             mask = mask + beam_mask
         mask = mask.bool()
     elif reduce_beams_to == 4:
-        # 从128个数中等间隔取4个
-        # 31, 63, 95, 127
         liat_4 = [31, 63, 95, 127]
         for id in liat_4:
             beam_mask = (theta < (beam_range[id-1]-0.000873)) * (theta > (beam_range[id]-0.000873))
             mask = mask + beam_mask
         mask = mask.bool()
     elif reduce_beams_to == 32:
-        # 从128个数中等间隔取32个
-        # 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127
         liat_32 = [3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127]
         for id in liat_32:
             beam_mask = (theta < (beam_range[id-1]-0.000873)) * (theta > (beam_range[id]-0.000873))
             mask = mask + beam_mask
         mask = mask.bool()
     elif reduce_beams_to == 64:
-        # 从128个数中等间隔取64个
-        # 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63, 65, 67, 69, 71, 73, 75, 77, 79, 81, 83, 85, 87, 89, 91, 93, 95, 97, 99, 101, 103, 105, 107, 109, 111, 113, 115, 117, 119, 121, 123, 125, 127
         list_64 = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63, 65, 67, 69, 71, 73, 75, 77, 79, 81, 83, 85, 87, 89, 91, 93, 95, 97, 99, 101, 103, 105, 107, 109, 111, 113, 115, 117, 119, 121, 123, 125, 127]
         for id in list_64:
             beam_mask = (theta < (beam_range[id-1]-0.000873)) * (theta > (beam_range[id]-0.000873))
@@ -632,12 +577,9 @@ def reduce_LiDAR_beams(pts, reduce_beams_to=32, chosen_beam_id=13):
     return points
 
 
-def transform_points(points, RT_matrix): #------输入为N*3点云
+def transform_points(points, RT_matrix): 
     points_3d = points[:, :3]
-    # 旋转变换
     transformed_xyz = np.matmul(points_3d, RT_matrix[:3,:3].T)
-    # 平移变化
     transformed_xyz += RT_matrix[:3, 3]
-    # 添加点云的intensity维度
     points_transformed = np.hstack((transformed_xyz, points[:, 3:]))
     return points_transformed

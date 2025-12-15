@@ -84,7 +84,7 @@ class GridMask(nn.Module):
         self.prob = self.st_prob * epoch / max_epoch #+ 1.#0.5
     @auto_fp16()
     def forward(self, x):
-        if np.random.rand() > self.prob or not self.training:#---这里说明了是训练时候使用的
+        if np.random.rand() > self.prob or not self.training:
             return x
         n,c,h,w = x.size()
         x = x.view(-1,h,w)

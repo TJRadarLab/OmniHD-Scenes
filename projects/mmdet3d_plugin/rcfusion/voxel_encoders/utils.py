@@ -135,7 +135,7 @@ class PFNLayer(nn.Module):
             out_channels = out_channels // 2
         self.units = out_channels
 
-        self.norm = build_norm_layer(norm_cfg, self.units)[1]  # 需要归一化的维度为64
+        self.norm = build_norm_layer(norm_cfg, self.units)[1]  
         self.linear = nn.Linear(in_channels, self.units, bias=False)
 
         assert mode in ['max', 'avg']
@@ -159,13 +159,13 @@ class PFNLayer(nn.Module):
         """
         x = self.linear(inputs)
         x = self.norm(x.permute(0, 2, 1).contiguous()).permute(0, 2,
-                                                               1).contiguous()  # N,C 或者 N C L
+                                                               1).contiguous()  
         x = F.relu(x)
 
         if self.mode == 'max':
             if aligned_distance is not None:
                 x = x.mul(aligned_distance.unsqueeze(-1))
-            x_max = torch.max(x, dim=1, keepdim=True)[0]  # 0是数，1是索引
+            x_max = torch.max(x, dim=1, keepdim=True)[0]  
         elif self.mode == 'avg':
             if aligned_distance is not None:
                 x = x.mul(aligned_distance.unsqueeze(-1))
@@ -247,7 +247,7 @@ class PFNLayer_Radar(nn.Module):
         snr_input = inputs.index_select(2,torch.tensor([5,6,14,15]).to(inputs.device))
         x1 = self.linear1(spatio_input)
         x1 = self.norm1(x1.permute(0, 2, 1).contiguous()).permute(0, 2,
-                                                               1).contiguous()  # N,C 或者 N C L
+                                                               1).contiguous()  
         
         x2 = self.linear2(velocity_input)
         x2 = self.norm2(x2.permute(0, 2, 1).contiguous()).permute(0, 2,
@@ -264,7 +264,7 @@ class PFNLayer_Radar(nn.Module):
         if self.mode == 'max':
             if aligned_distance is not None:
                 x = x.mul(aligned_distance.unsqueeze(-1))
-            x_max = torch.max(x, dim=1, keepdim=True)[0]  # 0是数，1是索引
+            x_max = torch.max(x, dim=1, keepdim=True)[0]  
         elif self.mode == 'avg':
             if aligned_distance is not None:
                 x = x.mul(aligned_distance.unsqueeze(-1))
@@ -314,9 +314,9 @@ class PFNLayer_RadarV2(nn.Module):
         self.units1 = out_channels // 2
         self.units2 = out_channels // 4
         self.units3 = out_channels // 4
-        self.norm1 = build_norm_layer(norm_cfg, self.units1)[1]  # 需要归一化的维度为32
-        self.norm2 = build_norm_layer(norm_cfg, self.units2)[1]# 需要归一化的维度为16
-        self.norm3 = build_norm_layer(norm_cfg, self.units3)[1]# 需要归一化的维度为16
+        self.norm1 = build_norm_layer(norm_cfg, self.units1)[1]  
+        self.norm2 = build_norm_layer(norm_cfg, self.units2)[1]
+        self.norm3 = build_norm_layer(norm_cfg, self.units3)[1]
         self.linear1 = nn.Linear(self.in_channels1, self.units1, bias=False)
         self.linear2 = nn.Linear(self.in_channels2, self.units2, bias=False)
         self.linear3 = nn.Linear(self.in_channels3, self.units3, bias=False)
@@ -344,7 +344,7 @@ class PFNLayer_RadarV2(nn.Module):
         snr_input = inputs.index_select(2,torch.tensor([5,13]).to(inputs.device))
         x1 = self.linear1(spatio_input)
         x1 = self.norm1(x1.permute(0, 2, 1).contiguous()).permute(0, 2,
-                                                               1).contiguous()  # N,C 或者 N C L
+                                                               1).contiguous()  
         x2 = self.linear2(velocity_input)
         x2 = self.norm2(x2.permute(0, 2, 1).contiguous()).permute(0, 2,
                                                                1).contiguous()
@@ -357,7 +357,7 @@ class PFNLayer_RadarV2(nn.Module):
         if self.mode == 'max':
             if aligned_distance is not None:
                 x = x.mul(aligned_distance.unsqueeze(-1))
-            x_max = torch.max(x, dim=1, keepdim=True)[0]  # 0是数，1是索引
+            x_max = torch.max(x, dim=1, keepdim=True)[0] 
         elif self.mode == 'avg':
             if aligned_distance is not None:
                 x = x.mul(aligned_distance.unsqueeze(-1))
