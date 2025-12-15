@@ -16,7 +16,7 @@ input_modality = dict(
     use_camera=True,
     use_radar=True) 
 
-#-------这里加入整个项目------------
+#-------Include project plugin here------------
 plugin = True
 plugin_dir = 'projects/mmdet3d_plugin/'
 
@@ -125,7 +125,7 @@ model = dict(
 
 #-------dataset----------
 dataset_type = 'NewScenesDataset' #---dataset
-data_root = 'data/NewScenes_Final/' #---数据路径
+data_root = 'data/NewScenes_Final/' #---data path
 file_client_args = dict(backend='disk')
 
 radar_use_dims = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -140,7 +140,7 @@ train_pipeline = [
     max_num=40000, #--没用到_pad_or_drop
     pc_range=point_cloud_range),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
-    dict(type='LoadMultiViewImageFromFiles_newsc', to_float32=False),#--PhotoMetricDistortionMultiViewImage要求True
+    dict(type='LoadMultiViewImageFromFiles_newsc', to_float32=False),
     
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='ObjectNameFilter', classes=class_names),
@@ -152,7 +152,7 @@ train_pipeline = [
     
     dict(type='LoadGTDepth',scale=0.5),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','img','points','img_depth']) #---加入radar points---
+    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','img','points','img_depth']) #---add radar points---
 ]
 
 test_pipeline = [
@@ -185,10 +185,10 @@ test_pipeline = [
 ]
 
 
-#------------val和test-----------
+
 data = dict(
     samples_per_gpu=1,
-    workers_per_gpu=8, #----默认4
+    workers_per_gpu=8, 
     train=dict(
         type=dataset_type,
         data_root=data_root,
@@ -197,7 +197,7 @@ data = dict(
         classes=class_names,
         modality=input_modality, 
         test_mode=False,
-        use_valid_flag=True,  #----在get_anno_info增加mask过滤掉无用目标/这里训练和测试时根据图像是否可视
+        use_valid_flag=True,  
         box_type_3d='LiDAR'),
     val=dict(type=dataset_type,
              data_root=data_root,
@@ -217,7 +217,7 @@ data = dict(
     nonshuffler_sampler=dict(type='DistributedSampler')
 )
 
-evaluation = dict(interval=2, pipeline=test_pipeline) #----eval评估间隔，改24
+evaluation = dict(interval=2, pipeline=test_pipeline) 
 
 
 

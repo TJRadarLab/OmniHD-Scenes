@@ -161,7 +161,7 @@ model = dict(
 
 #-------dataset----------
 dataset_type = 'NewScenesDataset' #---dataset
-data_root = 'data/NewScenes_Final/' #---数据路径
+data_root = 'data/NewScenes_Final/' #---data path
 file_client_args = dict(backend='disk')
 
 radar_use_dims = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -173,7 +173,7 @@ train_pipeline = [
     sweeps_num=3,
     use_dim=radar_use_dims,
     file_client_args=file_client_args,
-    max_num=40000, #--没用到_pad_or_drop
+    max_num=40000, #--not used: _pad_or_drop
     pc_range=point_cloud_range),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
     dict(type='LoadMultiViewImageFromFiles_newsc', to_float32=True),
@@ -186,10 +186,10 @@ train_pipeline = [
     dict(type='NormalizeMultiviewImage', **img_norm_cfg), #----normalization-------
     dict(type='RandomScaleImageMultiViewImage', scales=[0.5]),
     dict(type='PadMultiViewImage', size_divisor=32),
-        #----加入gt_depth-------
+        #----include gt_depth-------
     dict(type='LoadGTDepth',scale=0.5),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','img','points','img_depth']) #---加入radar points---
+    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','img','points','img_depth']) #---include radar points---
 ]
 
 test_pipeline = [
@@ -222,7 +222,7 @@ test_pipeline = [
 ]
 
 
-#------------val和test-----------
+
 data = dict(
     samples_per_gpu=1,
     workers_per_gpu=4,

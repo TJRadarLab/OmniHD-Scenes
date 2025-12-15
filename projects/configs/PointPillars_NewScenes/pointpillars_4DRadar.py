@@ -2,7 +2,7 @@
 # Code by [TONGJI] [Lianqing Zheng]. All rights reserved.
 # ---------------------------------------------
 
-point_cloud_range = [-60, -40, -3.0, 60, 40, 5.0] #---自车/lidar坐标系
+point_cloud_range = [-60, -40, -3.0, 60, 40, 5.0] #---Ego-vehicle / LiDAR coordinate frame
 voxel_size = [0.25, 0.25, 8]
 
 # For newScenes we usually do 4-class detection
@@ -15,7 +15,7 @@ input_modality = dict(
     use_camera=False,
     use_radar=True)
 
-#-------这里加入整个项目------------
+#-------Include project plugin here------------
 plugin = True
 plugin_dir = 'projects/mmdet3d_plugin/'
 
@@ -24,7 +24,7 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 model = dict(
     type='MVXFasterRCNN',
     pts_voxel_layer=dict(
-        max_num_points=10, #----这里设置成10
+        max_num_points=10, #----10
         point_cloud_range=point_cloud_range,
         voxel_size=voxel_size,
         max_voxels=(30000, 40000)),
@@ -54,7 +54,7 @@ model = dict(
         out_channels=[128, 128, 128]),
     pts_bbox_head=dict(
         type='Anchor3DHead',
-        num_classes=4, #---一共4类
+        num_classes=4, #---4 classes
         in_channels=384,
         feat_channels=384,
         use_direction_classifier=True,
@@ -128,7 +128,7 @@ train_pipeline = [
     sweeps_num=3,
     use_dim=radar_use_dims,
     file_client_args=file_client_args,
-    max_num=40000, #--没用到_pad_or_drop
+    max_num=40000, 
     pc_range=point_cloud_range),
 
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
@@ -137,7 +137,7 @@ train_pipeline = [
     dict(type='PointShuffle'),
 
     dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','points']) #---加入radar points---
+    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','points']) #---add radar points---
 ]
 
 test_pipeline = [

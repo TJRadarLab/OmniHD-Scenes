@@ -4,7 +4,7 @@
 # Feel free to reach out for collaboration opportunities.
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
-#----video_test_mode=False,bevformer代码中将
+#----video_test_mode=False, in BEVFormer code set
 # backbone R50-----
 # smaller BEV grid: 180*140
 # less encoder layers: 6 -> 3
@@ -12,7 +12,7 @@
 # multi-scale feautres -> single scale features (C5)
 
 
-point_cloud_range = [-60, -40, -3.0, 60, 40, 5.0] #---自车/lidar坐标系
+point_cloud_range = [-60, -40, -3.0, 60, 40, 5.0] #---Ego-vehicle / LiDAR coordinate frame
 voxel_size = [0.25, 0.25, 8]
 
 plugin = True
@@ -34,14 +34,14 @@ _dim_ = 256
 _pos_dim_ = _dim_//2
 _ffn_dim_ = _dim_*2
 _num_levels_ = 1  
-bev_h_ = 160  #--ymax-ymin
-bev_w_ = 240  #--xmax-xmin
+bev_h_ = 160  #--ymax - ymin
+bev_w_ = 240  #--xmax - xmin
 queue_length = 3 # each sequence contains `queue_length` frames.
 
 model = dict(
     type='BEVFormer',
     use_grid_mask=True,
-    video_test_mode=True, #----使用这个控制单帧
+    video_test_mode=True, #----Use this to control single-frame mode
     img_backbone=dict(
         type='ResNet',
         depth=101,
@@ -67,7 +67,7 @@ model = dict(
         bev_h=bev_h_, #--160
         bev_w=bev_w_,#--240
         num_query=900,
-        num_classes=4,#----这里是4类
+        num_classes=4, #----This is 4 classes
         in_channels=_dim_,
         sync_cls_avg_factor=True,
         with_box_refine=True,  
@@ -78,7 +78,7 @@ model = dict(
             use_shift=True,
             use_can_bus=True,
             embed_dims=_dim_,
-            rotate_center=[80,120], #-----这里是bev中心点
+            rotate_center=[80,120], #-----This is the BEV center point
             encoder=dict(
                 type='BEVFormerEncoder',
                 num_layers=3,
@@ -91,7 +91,7 @@ model = dict(
                         dict(
                             type='TemporalSelfAttention',
                             embed_dims=_dim_, #--256
-                            num_levels=1), #--一个feature map
+                            num_levels=1), #--single feature map
                         dict(
                             type='SpatialCrossAttention',
                             pc_range=point_cloud_range,
@@ -104,7 +104,7 @@ model = dict(
                         )
                     ],
                     feedforward_channels=_ffn_dim_, #--512
-                    ffn_dropout=0.1, #---MyCustomBaseTransformerLayer中初始化
+                    ffn_dropout=0.1, #---Initialized in MyCustomBaseTransformerLayer
                     operation_order=('self_attn', 'norm', 'cross_attn', 'norm',
                                      'ffn', 'norm'))),
             decoder=dict(  #-------DETR3D--------
@@ -158,7 +158,7 @@ model = dict(
         out_size_factor=4, 
         assigner=dict(
             type='HungarianAssigner3D',     
-            cls_cost=dict(type='FocalLossCost', weight=2.0),#-----在core/bbox/match_costs
+            cls_cost=dict(type='FocalLossCost', weight=2.0),#-----in core/bbox/match_costs
             reg_cost=dict(type='BBox3DL1Cost', weight=0.25),
             iou_cost=dict(type='IoUCost', weight=0.0), 
             pc_range=point_cloud_range))))

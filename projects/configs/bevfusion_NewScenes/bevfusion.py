@@ -25,7 +25,7 @@ img_norm_cfg = dict(
 
 
 
-final_dim=(544, 960) # HxW这里输入原始尺寸，在LSS
+final_dim=(544, 960) # HxW: input original size used in LSS
 downsample=4
 model = dict(
     type='BEVFUSION_depth',
@@ -158,7 +158,7 @@ model = dict(
 
 
 dataset_type = 'NewScenesDataset' #---dataset
-data_root = 'data/NewScenes_Final/' 
+data_root = 'data/NewScenes_Final/' #---data path
 file_client_args = dict(backend='disk')
 
 radar_use_dims = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -170,7 +170,7 @@ train_pipeline = [
     sweeps_num=3,
     use_dim=radar_use_dims,
     file_client_args=file_client_args,
-    max_num=40000, #--没用到_pad_or_drop
+    max_num=40000,
     pc_range=point_cloud_range),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
     dict(type='LoadMultiViewImageFromFiles_newsc', to_float32=True),
@@ -186,7 +186,7 @@ train_pipeline = [
         #----加入gt_depth-------
     dict(type='LoadGTDepth',scale=0.5),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','img','points','img_depth']) #---加入radar points---
+    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','img','points','img_depth']) #---add radar points---
 ]
 
 test_pipeline = [

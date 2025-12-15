@@ -118,7 +118,7 @@ model = dict(
 
 #-------dataset----------
 dataset_type = 'NewScenesDataset' #---dataset
-data_root = 'data/NewScenes_Final/' #---数据路径
+data_root = 'data/NewScenes_Final/' #---data path
 file_client_args = dict(backend='disk')
 
 radar_use_dims = [0, 1, 2, 3, 4, 5, 6] 
@@ -139,7 +139,7 @@ train_pipeline = [
     dict(type='PointShuffle'),
 
     dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','points']) #---加入radar points---
+    dict(type='CustomCollect3D', keys=['gt_bboxes_3d', 'gt_labels_3d','points']) #---add radar points---
 ]
 
 test_pipeline = [

@@ -4,7 +4,7 @@
 # Feel free to reach out for collaboration opportunities.
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
-#----video_test_mode=False,bevformer代码中将
+#----video_test_mode=False,
 # backbone R50-----
 # smaller BEV grid: 180*140
 # less encoder layers: 6 -> 3
@@ -12,15 +12,15 @@
 # multi-scale feautres -> single scale features (C5)
 
 
-point_cloud_range = [-60, -40, -3.0, 60, 40, 5.0] #---自车/lidar坐标系
+point_cloud_range = [-60, -40, -3.0, 60, 40, 5.0] #---Ego-vehicle / LiDAR coordinate frame
+#-------Include project plugin here------------
 voxel_size = [0.25, 0.25, 8]
-#-------这里加入整个项目------------
 plugin = True
 plugin_dir = 'projects/mmdet3d_plugin/'
 
 
 img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True) #---这里fcos3d的pretrain是torchvision的R50
+    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True) #---fcos3d pretrain uses torchvision R50
 # For newScenes we usually do 9-class detection
 class_names = [
     'car', 'pedestrian', 'rider', 'large_vehicle']
@@ -30,12 +30,12 @@ input_modality = dict(
     use_camera=True,
     use_radar=False)
 
-_dim_ = 256 #----FPN输出维度---
+_dim_ = 256 #----FPN output channels/dimension---
 _pos_dim_ = _dim_//2
 _ffn_dim_ = _dim_*2
-_num_levels_ = 1  #--FPN输出尺度个数--
-bev_h_ = 160  #--ymax-ymin
-bev_w_ = 240  #--xmax-xmin
+_num_levels_ = 1  #--Number of FPN output scales--
+bev_h_ = 160  #--ymax - ymin
+bev_w_ = 240  #--xmax - xmin
 queue_length = 3 # each sequence contains `queue_length` frames.
 
 model = dict(
@@ -88,7 +88,7 @@ model = dict(
                         dict(
                             type='TemporalSelfAttention',
                             embed_dims=_dim_, #--256
-                            num_levels=1), #--一个feature map
+                            num_levels=1), 
                         dict(
                             type='SpatialCrossAttention',
                             pc_range=point_cloud_range,
@@ -101,7 +101,7 @@ model = dict(
                         )
                     ],
                     feedforward_channels=_ffn_dim_, #--512
-                    ffn_dropout=0.1, #---MyCustomBaseTransformerLayer中初始化
+                    ffn_dropout=0.1, 
                     operation_order=('self_attn', 'norm', 'cross_attn', 'norm',
                                      'ffn', 'norm'))),
             decoder=dict(  #-------DETR3D--------
@@ -160,8 +160,8 @@ model = dict(
             iou_cost=dict(type='IoUCost', weight=0.0), 
             pc_range=point_cloud_range))))
 
-dataset_type = 'CustomNewScenesDataset' #--带有多帧时序
-data_root = 'data/NewScenes_Final/' #---数据路径
+dataset_type = 'CustomNewScenesDataset' #--with multi-frame temporal
+data_root = 'data/NewScenes_Final/' #---data path
 file_client_args = dict(backend='disk')
 
 

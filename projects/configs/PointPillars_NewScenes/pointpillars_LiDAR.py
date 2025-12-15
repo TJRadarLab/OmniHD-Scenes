@@ -13,6 +13,7 @@ input_modality = dict(
     use_camera=False,
     use_radar=False)
 
+#-------Include project plugin here------------
 plugin = True
 plugin_dir = 'projects/mmdet3d_plugin/'
 
