@@ -56,7 +56,7 @@ class PointCloud(ABC):
         """
         pass
 
-    #---------------多帧叠加--------------
+    #---------------Multi-sweep aggregation--------------
     @classmethod
     def from_file_multisweep(cls,
                              nusc: 'NuScenes',
@@ -90,11 +90,11 @@ class PointCloud(ABC):
         ref_time = 1e-6 * ref_sd_rec['timestamp']
 
         # Homogeneous transform from ego car frame to reference frame.
-        #----自车到lidar---
+        #----ego to lidar---
         ref_from_car = transform_matrix(ref_cs_rec['translation'], Quaternion(ref_cs_rec['rotation']), inverse=True)
 
         # Homogeneous transformation matrix from global to _current_ ego car frame.
-        #--------全局到自车-----
+        #--------global to ego-----
         car_from_global = transform_matrix(ref_pose_rec['translation'], Quaternion(ref_pose_rec['rotation']),
                                            inverse=True)
 
@@ -117,7 +117,7 @@ class PointCloud(ABC):
                                                 inverse=False)
 
             # Fuse four transformation matrices into one and perform transform.
-            #----当前转到car，car转到全局，全局转到ref时的car，car转到ref
+            #----current sensor to ego, ego to global, global to ref ego, ego to ref
             trans_matrix = reduce(np.dot, [ref_from_car, car_from_global, global_from_car, car_from_current])
             current_pc.transform(trans_matrix)
 
@@ -523,21 +523,21 @@ class LidarSegPointCloud:
 
         return ax
 
-#----------------------------修改了一下，加入track_ID和visibility--------------------------------
-#-------------------------visibility表示是否在相机可见，0表示不可见--------------------
-#---------------------判断条件为中心点xy在70和55米内图像完全不可见目标-------------------------------------
+#----------------------------Adjusted to include track_ID and visibility--------------------------------
+#-------------------------visibility indicates whether the object is visible in cameras; 0 means not visible--------------------
+#---------------------Criteria: center xy within 70/55 m but fully invisible in the image-------------------------------------
 class Box:
     """ Simple data class representing a 3d box including, label, score and velocity. """
 
     def __init__(self,
-                 center: List[float], #----中心点
-                 size: List[float], #----wlh
-                 orientation: Quaternion, #---朝向角
-                 label: int = np.nan,  #----int标签
-                 score: float = np.nan,#----分类得分
-                 velocity: Tuple = (np.nan, np.nan, np.nan),#------速度
-                 visibility: bool = True, #----是否在相机可见
-                 name: str = None, #----类别名
+                 center: List[float], #----center point
+                 size: List[float], #----width/length/height
+                 orientation: Quaternion, #---heading angle
+                 label: int = np.nan,  #----integer label
+                 score: float = np.nan,#----classification score
+                 velocity: Tuple = (np.nan, np.nan, np.nan),#------velocity
+                 visibility: bool = True, #----visible in cameras
+                 name: str = None, #----category name
                  track_id: int = np.nan): #----track_id
         """
         :param center: Center of box given as x, y, z.
@@ -546,7 +546,7 @@ class Box:
         :param label: Integer label, optional.
         :param score: Classification score, optional.
         :param velocity: Box velocity in x, y, z direction.
-        :param visibility: Is it visible in cameras , #----是否在相机可见
+        :param visibility: Is it visible in cameras.
         :param name: Box name, optional. Can be used e.g. for denote category name.
         :param track_id: Unique tracking id.
         """
@@ -580,7 +580,7 @@ class Box:
         track_id = (self.track_id == other.track_id) or (np.isnan(self.track_id) and np.isnan(other.track_id))
 
         return center and wlh and orientation and label and score and vel and track_id
-    #---------------------加入visibility和track_id---------------------
+    #---------------------Include visibility and track_id---------------------
     def __repr__(self):
         repr_str = 'label: {}, score: {:.2f}, xyz: [{:.2f}, {:.2f}, {:.2f}], wlh: [{:.2f}, {:.2f}, {:.2f}], ' \
                    'rot axis: [{:.2f}, {:.2f}, {:.2f}], ang(degrees): {:.2f}, ang(rad): {:.2f}, ' \

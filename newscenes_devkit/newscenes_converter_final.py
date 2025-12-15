@@ -183,7 +183,7 @@ def _fill_trainval_infos(newsc,
                         'camera_left_back', 
                         'camera_right_back']
         for cam in camera_types:
-            #TODO 根据scene_token取对应的相机内参和畸变参数
+            #TODO Get camera intrinsics and distortion using the scene_token
             cam_intrinsic = newsc.get('sensor_calibration',info['scene_token'])['calib'][cam]['intrinsic']
             cam_distortion = newsc.get('sensor_calibration',info['scene_token'])['calib'][cam]['distortion']
 
@@ -211,7 +211,7 @@ def _fill_trainval_infos(newsc,
                     radar_info = obtain_sensor2top(newsc, radar_token, info['scene_token'], l2e_t, l2e_r_mat,
                                                 e2g_t, e2g_r_mat, radar_name)
                     sweeps.append(radar_info)
-                    radar_token = newsc.get('sample_data', radar_token)['prev'] #---token赋值成前一帧sync
+                    radar_token = newsc.get('sample_data', radar_token)['prev'] #---assign token to previous sync frame
                 else:
                     radar_info = obtain_sensor2top(newsc, radar_token, info['scene_token'], l2e_t, l2e_r_mat,
                                                 e2g_t, e2g_r_mat, radar_name)
@@ -276,7 +276,7 @@ def _fill_trainval_infos(newsc,
             train_newsc_infos.append(info)
         if sample['scene_token'] in val_scenes:
             val_newsc_infos.append(info)  
-        #TODO 有测试集时的处理
+        #TODO Handle the test set when available
 
     return train_newsc_infos, val_newsc_infos
 
@@ -378,7 +378,7 @@ def obtain_sensor2top(newsc,
         np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T)
     T -= e2g_t @ (np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(l2e_r_mat).T
                   ) + l2e_t @ np.linalg.inv(l2e_r_mat).T
-    sweep['sensor2lidar_rotation'] = R.T  # 这里计算过程是(e2l*g2e*e2g*s2e).T.T
+    sweep['sensor2lidar_rotation'] = R.T  # The computation here follows (e2l*g2e*e2g*s2e).T.T
     sweep['sensor2lidar_translation'] = T
     return sweep
 

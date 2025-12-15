@@ -44,6 +44,7 @@ class DetectionEval:
     - Every sample_token is given in the results, although there may be not predictions for that sample.
 
     """
+
     def __init__(self,
                  newsc: NewScenes,
                  config: DetectionConfig,
@@ -51,7 +52,7 @@ class DetectionEval:
                  eval_set: str,
                  output_dir: str = None,
                  verbose: bool = True,
-                 bad_conditions: bool = False):#--------加入tag---
+                 bad_conditions: bool = False):  #--------add tag---
         """
         Initialize a DetectionEval object.
         :param newsc: A NewScenes object.
@@ -62,16 +63,15 @@ class DetectionEval:
         :param verbose: Whether to print to stdout.
         """
         self.newsc = newsc
-        self.result_path = result_path #-------json检测结果-----
-        self.eval_set = eval_set 
+        self.result_path = result_path  # json detection result
+        self.eval_set = eval_set
         self.output_dir = output_dir
         self.verbose = verbose
-        self.cfg = config    #----------调用config.py中的config_factory，生成detection_newsc_config.json的DetectionConfig类实例---
+        self.cfg = config  # Use config_factory in config.py to create DetectionConfig instance
 
         # Check result file exists.
         assert os.path.exists(result_path), 'Error: The result file does not exist!'
 
-        
         self.plot_dir = os.path.join(self.output_dir, 'plots')
         if not os.path.isdir(self.output_dir):
             os.makedirs(self.output_dir)
@@ -88,26 +88,25 @@ class DetectionEval:
         assert set(self.pred_boxes.sample_tokens) == set(self.gt_boxes.sample_tokens), \
             "Samples in split doesn't match samples in predictions."
 
-
-       
-        #---------------加入恶劣天气条件下的过滤条件----------------
+        #---------------Add filtering conditions for adverse weather----------------
         # Filter boxes (distance, points per box, etc.).
         if verbose:
             print('Filtering predictions')
-        self.pred_boxes = filter_eval_boxes(newsc, self.pred_boxes, self.cfg.class_range, verbose=verbose,bad_conditions=bad_conditions)
+        self.pred_boxes = filter_eval_boxes(newsc, self.pred_boxes, self.cfg.class_range, verbose=verbose,
+                                            bad_conditions=bad_conditions)
         if verbose:
             print('Filtering ground truth annotations')
-        self.gt_boxes = filter_eval_boxes(newsc, self.gt_boxes, self.cfg.class_range, verbose=verbose,bad_conditions=bad_conditions)
-        
+        self.gt_boxes = filter_eval_boxes(newsc, self.gt_boxes, self.cfg.class_range, verbose=verbose,
+                                          bad_conditions=bad_conditions)
+
         assert set(self.pred_boxes.sample_tokens) == set(self.gt_boxes.sample_tokens), \
             "Samples in split doesn't match samples in predictions."
         self.sample_tokens = self.gt_boxes.sample_tokens
 
-    #------------
     def evaluate(self) -> Tuple[DetectionMetrics, DetectionMetricDataList]:
         """
         Performs the actual evaluation.
-        :return: A tuple of high-level and the raw metric data.
+        :return: A tuple of high-level and raw metric data.
         """
         start_time = time.time()
 
@@ -117,9 +116,9 @@ class DetectionEval:
         if self.verbose:
             print('Accumulating metric data...')
         metric_data_list = DetectionMetricDataList()
-        #--------计算每类的给定距离阈值【1,2,3,4】的PR曲线及4个TP指标累积均值-------------
+        #--------Compute PR curves per class at distance thresholds [1,2,3,4] and accumulate four TP metrics-------------
         for class_name in self.cfg.class_names:
-            for dist_th in self.cfg.dist_ths: #---【1,2,3,4】
+            for dist_th in self.cfg.dist_ths:  # [1,2,3,4]
                 md = accumulate(self.gt_boxes, self.pred_boxes, class_name, self.cfg.dist_fcn_callable, dist_th)
                 metric_data_list.set(class_name, dist_th, md)
 
@@ -128,18 +127,17 @@ class DetectionEval:
         # -----------------------------------
         if self.verbose:
             print('Calculating metrics...')
-        #-------------
         metrics = DetectionMetrics(self.cfg)
         for class_name in self.cfg.class_names:
             # Compute APs.
-            #-------------计算单类在给定距离阈值下的AP-------------------
+            #-------------Compute per-class AP at given distance thresholds-------------------
             for dist_th in self.cfg.dist_ths:
                 metric_data = metric_data_list[(class_name, dist_th)]
                 ap = calc_ap(metric_data, self.cfg.min_recall, self.cfg.min_precision)
                 metrics.add_label_ap(class_name, dist_th, ap)
 
             # Compute TP metrics.
-            #----------------计算单类给定阈值下的TP误差---------------
+            #----------------Compute per-class TP errors at the given threshold---------------
             for metric_name in TP_METRICS:
                 metric_data = metric_data_list[(class_name, self.cfg.dist_th_tp)]
                 if class_name in ['traffic_cone'] and metric_name in ['attr_err', 'vel_err', 'orient_err']:
@@ -157,7 +155,7 @@ class DetectionEval:
 
     def render(self, metrics: DetectionMetrics, md_list: DetectionMetricDataList) -> None:
         """
-        Renders various PR and TP curves.
+        Render PR and TP curves.
         :param metrics: DetectionMetrics instance.
         :param md_list: DetectionMetricDataList instance.
         """
@@ -165,43 +163,43 @@ class DetectionEval:
             print('Rendering PR and TP curves')
 
         def savepath(name):
-            # return os.path.join(self.plot_dir, name + '.pdf') #----修改pdf/png
-            return os.path.join(self.plot_dir, name + '.png') #----修改pdf/png
-        #-----------同时绘制每类的PR TP曲线-------------------------
+            # return os.path.join(self.plot_dir, name + '.pdf') #----switch pdf/png if desired
+            return os.path.join(self.plot_dir, name + '.png') #----default to png
+
+        #-----------Plot PR and TP curves for every class-------------------------
         summary_plot(md_list, metrics, min_precision=self.cfg.min_precision, min_recall=self.cfg.min_recall,
                      dist_th_tp=self.cfg.dist_th_tp, savepath=savepath('summary'))
-        #-----------单独绘制每类的PR TP曲线-----------------------
+
+        #-----------Plot PR and TP curves per class-----------------------
         for detection_name in self.cfg.class_names:
             class_pr_curve(md_list, metrics, detection_name, self.cfg.min_precision, self.cfg.min_recall,
                            savepath=savepath(detection_name + '_pr'))
 
             class_tp_curve(md_list, metrics, detection_name, self.cfg.min_recall, self.cfg.dist_th_tp,
                            savepath=savepath(detection_name + '_tp'))
-        #-------统一距离阈值不同类别下的PR曲线---------
+
+        #-------PR curves across classes for each distance threshold---------
         for dist_th in self.cfg.dist_ths:
             dist_pr_curve(md_list, metrics, dist_th, self.cfg.min_precision, self.cfg.min_recall,
                           savepath=savepath('dist_pr_' + str(dist_th)))
 
-    #--------------主函数，评估与绘制结果-------------------
     def main(self,
              plot_examples: int = 0,
              render_curves: bool = True) -> Dict[str, Any]:
         """
-        Main function that loads the evaluation code, visualizes samples, runs the evaluation and renders stat plots.
-        :param plot_examples: How many example visualizations to write to disk.
+        Main function that loads the evaluation code, optionally visualizes samples,
+        runs the evaluation, and renders statistic plots.
+        :param plot_examples: Number of example visualizations to write to disk.
         :param render_curves: Whether to render PR and TP curves to disk.
-        :return: A dict that stores the high-level metrics and meta data.
+        :return: High-level metrics and meta data.
         """
-        # #-------一般默认为0，随机绘制一些检测结果与真值，在BEV视角下-----------
-        # #----TODO 尚未完成------
+        # #-------Typically 0; randomly visualize some detections vs GT in BEV-----------
+        # #----TODO not finished------
         # if plot_examples > 0:
-        #     # Select a random but fixed subset to plot.
         #     random.seed(42)
         #     sample_tokens = list(self.sample_tokens)
         #     random.shuffle(sample_tokens)
         #     sample_tokens = sample_tokens[:plot_examples]
-
-        #     # Visualize samples.
         #     example_dir = os.path.join(self.output_dir, 'examples')
         #     if not os.path.isdir(example_dir):
         #         os.mkdir(example_dir)
@@ -209,18 +207,14 @@ class DetectionEval:
         #         visualize_sample(self.newsc,
         #                          sample_token,
         #                          self.gt_boxes if self.eval_set != 'test' else EvalBoxes(),
-        #                          # Don't render test GT.
         #                          self.pred_boxes,
         #                          eval_range=max(self.cfg.class_range.values()),
         #                          savepath=os.path.join(example_dir, '{}.png'.format(sample_token)))
-    #------------------------------------------------------------------------------------------------
-    
+
         # Run evaluation.
-        #------------原始每类每个阈值下的AP TP等结果-------------
         metrics, metric_data_list = self.evaluate()
 
         # Render PR and TP curves.
-        #------------绘制PR TP曲线------------------
         if render_curves:
             self.render(metrics, metric_data_list)
 
@@ -241,11 +235,10 @@ class DetectionEval:
             'scale_err': 'mASE',
             'orient_err': 'mAOE',
             'vel_err': 'mAVE',
-            
         }
         for tp_name, tp_val in metrics_summary['tp_errors'].items():
             print('%s: %.4f' % (err_name_mapping[tp_name], tp_val))
-        print('NOS: %.4f' % (metrics_summary['NOS']))  #---newscenes overall score[NOS]
+        print('NOS: %.4f' % (metrics_summary['NOS']))  #---newscenes overall score [NOS]
         print('Eval time: %.1fs' % metrics_summary['eval_time'])
 
         # Print per-class metrics.
@@ -256,20 +249,18 @@ class DetectionEval:
         class_tps = metrics_summary['label_tp_errors']
         for class_name in class_aps.keys():
             print('%-20s\t%-6.3f\t%-6.3f\t%-6.3f\t%-6.3f\t%-6.3f'
-                % (class_name, class_aps[class_name],
-                    class_tps[class_name]['trans_err'],
-                    class_tps[class_name]['scale_err'],
-                    class_tps[class_name]['orient_err'],
-                    class_tps[class_name]['vel_err']
-                    ))
+                  % (class_name,
+                     class_aps[class_name],
+                     class_tps[class_name]['trans_err'],
+                     class_tps[class_name]['scale_err'],
+                     class_tps[class_name]['orient_err'],
+                     class_tps[class_name]['vel_err']))
 
         return metrics_summary
 
 
 class NewScenesEval(DetectionEval):
-    """
-    Dummy class for backward-compatibility. Same as DetectionEval.
-    """
+    """Dummy class for backward-compatibility. Same as DetectionEval."""
 
 
 if __name__ == "__main__":
@@ -287,8 +278,7 @@ if __name__ == "__main__":
     parser.add_argument('--version', type=str, default='v1.0-trainval',
                         help='Which version of the newScenes dataset to evaluate on, e.g. v1.0-trainval.')
     parser.add_argument('--config_path', type=str, default='',
-                        help='Path to the configuration file.'
-                             'If no path given, the CVPR 2019 configuration will be used.')
+                        help='Path to the configuration file. If no path given, the CVPR 2019 configuration is used.')
     parser.add_argument('--plot_examples', type=int, default=10,
                         help='How many example visualizations to write to disk.')
     parser.add_argument('--render_curves', type=int, default=1,
@@ -296,7 +286,7 @@ if __name__ == "__main__":
     parser.add_argument('--verbose', type=int, default=1,
                         help='Whether to print to stdout.')
     parser.add_argument('--bad_conditions', type=int, default=0,
-                        help='Whether to eval bad conditions.')
+                        help='Whether to evaluate bad conditions.')
     args = parser.parse_args()
 
     result_path_ = os.path.expanduser(args.result_path)
@@ -319,5 +309,5 @@ if __name__ == "__main__":
 
     newsc_ = NewScenes(version=version_, verbose=verbose_, dataroot=dataroot_)
     newsc_eval = DetectionEval(newsc_, config=cfg_, result_path=result_path_, eval_set=eval_set_,
-                              output_dir=output_dir_, verbose=verbose_,bad_conditions=bad_conditions)
+                              output_dir=output_dir_, verbose=verbose_, bad_conditions=bad_conditions)
     newsc_eval.main(plot_examples=plot_examples_, render_curves=render_curves_)

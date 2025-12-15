@@ -14,7 +14,7 @@ if __name__ == '__main__':
     use_radar=True)
 
     newsc = NewScenes(version='v1.0-mini', dataroot='data/newscenes-mini', verbose=True)
-    #----------读取每个sample，将验证集的拿出来----------
+    #----------Read each sample and keep those in the validation split----------
     sample_tokens_all = [s['token'] for s in newsc.sample]
     sample_tokens = []
     for sample_token in sample_tokens_all:
@@ -22,7 +22,7 @@ if __name__ == '__main__':
         
         if scene_token in newsc.scene_split['val_mini']:
             sample_tokens.append(sample_token)
-    #------------第一种，取出真值，置信度为1，生成假的测试json结果-----------------------------
+    #------------Option 1: take ground truth with confidence 1 to create a fake test json result-----------------------------
     newsc_annos = {}
     for token in mmcv.track_iter_progress(sample_tokens):
         annos = []
@@ -30,12 +30,12 @@ if __name__ == '__main__':
         for i, box in enumerate(gt_boxes):
             newsc_anno = dict(
                 sample_token=token, #---token
-                translation=box.center.tolist(), #---lidar/ego坐标系中心点
+                translation=box.center.tolist(), #---center point in lidar/ego frame
                 size=box.wlh.tolist(), #---wlh
-                rotation=box.orientation.elements.tolist(), #----四元数
+                rotation=box.orientation.elements.tolist(), #----quaternion
                 velocity=box.velocity[:2].tolist(), #----vxvy
                 detection_name=box.name if box.name!='cyclist' else 'rider', #----name
-                detection_score=1, #---置信度
+                detection_score=1, #---confidence
                             )
             annos.append(newsc_anno)
         newsc_annos[token] = annos

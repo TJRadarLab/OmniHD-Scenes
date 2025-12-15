@@ -14,7 +14,7 @@ from newscenes_devkit.eval.common.data_classes import MetricData, EvalBox
 from newscenes_devkit.eval.common.utils import center_distance
 from newscenes_devkit.eval.detection.constants import DETECTION_NAMES, ATTRIBUTE_NAMES, TP_METRICS
 
-#-------------------用来设置评估指标参数----------------
+#-------------------Used to set evaluation metric parameters----------------
 class DetectionConfig:
     """ Data class that specifies the detection evaluation settings. """
 
@@ -60,7 +60,7 @@ class DetectionConfig:
             'max_boxes_per_sample': self.max_boxes_per_sample,
             'mean_ap_weight': self.mean_ap_weight
         }
-    #-------使用json中的参数初始化类-------
+    #-------Initialize class using parameters from JSON-------
     @classmethod
     def deserialize(cls, content: dict):
         """ Initialize from serialized dictionary. """
@@ -260,7 +260,7 @@ class DetectionMetrics:
             scores[metric_name] = score
 
         return scores
-    #-------------------NOS得分=(mAP*weight+tpscore)/(weight+len(tpscore))----
+    #-------------------NOS score = (mAP*weight + tp_score)/(weight + len(tp_score))----
     @property
     def no_score(self) -> float:
         """
@@ -277,13 +277,13 @@ class DetectionMetrics:
 
     def serialize(self):
         return {
-            'label_aps': self._label_aps,  #------每一类在每个距离阈值下的ap------
-            'mean_dist_aps': self.mean_dist_aps, #--------每一类所有距离阈值下的ap均值-------
-            'mean_ap': self.mean_ap,  #----------------所有类别的AP均值，即总的mAP-------------
-            'label_tp_errors': self._label_tp_errors, #--------每个类别每个TP指标下的误差，只算阈值3米时候-----
-            'tp_errors': self.tp_errors, #-------------每个指标所有类别的TP误差平均值-------------
-            'tp_scores': self.tp_scores, #-------------1-tp误差，用来算NDS得分------------------------
-            'NOS': self.no_score, #----------------NOS，4*map加上其他tp得分除以总权重-----------
+            'label_aps': self._label_aps,  #------AP per class for each distance threshold------
+            'mean_dist_aps': self.mean_dist_aps, #--------Mean AP per class across all distance thresholds-------
+            'mean_ap': self.mean_ap,  #----------------Mean AP across all classes (overall mAP)-------------
+            'label_tp_errors': self._label_tp_errors, #--------TP errors per class per TP metric (only at 3 m threshold)-----
+            'tp_errors': self.tp_errors, #-------------Average TP error per metric across all classes-------------
+            'tp_scores': self.tp_scores, #-------------1 - TP error, used for NOS score------------------------
+            'NOS': self.no_score, #----------------NOS: (4*mAP + other TP scores) divided by total weight-----------
             'eval_time': self.eval_time,
             'cfg': self.cfg.serialize()
         }
@@ -331,7 +331,7 @@ class DetectionBox(EvalBox):
                  detection_name: str = 'car',  # The class name used in the detection challenge.
                  detection_score: float = -1.0,  # GT samples do not have a score.
                  attribute_name: str = '',# Box attribute. Each box can have at most 1 attribute.
-                 visibility: bool = 1):  #--图像内是否可视
+                 visibility: bool = 1):  #--visibility
 
         super().__init__(sample_token, translation, size, rotation, velocity, ego_translation, num_pts)
 

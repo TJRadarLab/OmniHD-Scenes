@@ -51,7 +51,7 @@ class NewScenes:
         self.version = version
         self.dataroot = dataroot
         self.verbose = verbose
-        #-----json列表----
+        #-----json table list----
         self.table_names = ['sample', 'sample_data', 'annotations','ego_pose','imu_data','sensor_calibration','meta']
 
         assert osp.exists(self.table_root), 'Database version not found: {}'.format(self.table_root)
@@ -125,8 +125,8 @@ class NewScenes:
             print("Done reverse indexing in {:.1f} seconds.\n======".format(time.time() - start_time))
 
 
-#-----------根据self._token2ind中token与index的对应关系索引出对应的记录----------------
-#----------这里pose和imudata也要对应修改，加入scene_token----------------
+#-----------Index record using token-to-index mapping in self._token2ind----------------
+#----------Pose and imu_data also need scene_token handling here----------------
     def get(self, table_name: str, token: str, scene_token=None) -> dict:
         """
         Returns a record from table in constant runtime.
@@ -139,7 +139,7 @@ class NewScenes:
     
         return getattr(self, table_name)[self.getind(table_name, token, scene_token)]
     
-#----------这里pose和imudata也要对应修改，加入scene_token----------------
+#----------Pose and imu_data also need scene_token handling here----------------
     def getind(self, table_name: str, token: str, scene_token=None) -> int:
         """
         This returns the index of the record in a table in constant runtime.
@@ -154,8 +154,8 @@ class NewScenes:
         return self._token2ind[table_name][token]
 #--------------------------------------------------------------------------------
 
-#-------------------获取返回lidar/ego下的标注信息,每个bbox以Box类存储----------------------------
-#----------这里pose和imudata也要对应修改，加入scene_token----------------
+#-------------------Fetch annotations in lidar/ego frame; each bbox is stored as a Box----------------------------
+#----------Pose and imu_data also need scene_token handling here----------------
     def get_annotation_box(self, sample_token: str) -> Box:
         """
         Instantiates a Box class from a sample annotation record.
@@ -263,7 +263,7 @@ class NewScenes:
         current_anno = self.get('annotations', sample_token)['annotations']
         current_sync = self.get('sample_data', sample_token)
         scene_token = self.get('sample', sample_token)['scene_token']
-        current_pose = self.get('ego_pose', current_sync['ego_pose']['lidar_top_compensation'],scene_token)['pose'] #--16位pose
+        current_pose = self.get('ego_pose', current_sync['ego_pose']['lidar_top_compensation'],scene_token)['pose'] #--16-element pose
         current_pose = np.array(current_pose).reshape(4, 4)
         box_id = [] 
         boxes_center_ego = [] 

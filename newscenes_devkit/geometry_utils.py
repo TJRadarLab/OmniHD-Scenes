@@ -146,12 +146,12 @@ def points_in_box(box: 'Box', points: np.ndarray, wlh_factor: float = 1.0):
 
 
 
-def transform_points(points_3d, RT_matrix): #------输入为N*3点云
+def transform_points(points_3d, RT_matrix): #------Input is an Nx3 point cloud
     
-    # 旋转变换
+    # Rotation transform
     transformed_xyz = np.matmul(points_3d, RT_matrix[:3,:3].T)
-    # 平移变化
+    # Translation transform
     transformed_xyz += RT_matrix[:3, 3]
-    # 添加点云的intensity维度
+    # Add the intensity dimension for the point cloud
 
     return transformed_xyz

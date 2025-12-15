@@ -22,7 +22,7 @@ from newscenes_devkit.geometry_utils import view_points
 
 Axis = Any
 
-#-------------BEV视角绘制预测值和真值的结果--------------------
+#-------------Plot predictions and ground truth in BEV view--------------------
 def visualize_sample(
                      sample_token: str,
                      gt_boxes: List[Box],
@@ -31,7 +31,7 @@ def visualize_sample(
                      lidar_points: np.array = None,
                      point_cloud_range: List[float] = None,
 
-                     conf_th: float = 0.15, #---置信度阈值
+                     conf_th: float = 0.15, #---confidence threshold
                      verbose: bool = True,
                      savepath: str = None) -> None:
 
@@ -40,9 +40,9 @@ def visualize_sample(
 
     # Show point cloud.
     if radar_points is not None:
-        ax.scatter(radar_points[:, 0], radar_points[:, 1], color='red', s=20, label='Radar Points')  # 设置颜色为蓝色，点的大小为30
+        ax.scatter(radar_points[:, 0], radar_points[:, 1], color='red', s=20, label='Radar Points')  # color red, size 20
     if lidar_points is not None:
-        ax.scatter(lidar_points[:, 0], lidar_points[:, 1], color='black', s=0.2, alpha=0.5, label='Lidar Points')  # 设置颜色为红色，点的大小为10
+        ax.scatter(lidar_points[:, 0], lidar_points[:, 1], color='black', s=0.2, alpha=0.5, label='Lidar Points')  # color black, size 0.2
 
     # Show ego vehicle.
     ax.plot(0, 0, 'x', color='black')
@@ -115,7 +115,7 @@ def class_pr_curve(md_list: DetectionMetricDataList,
 
     ax.legend(loc='best')
     if savepath is not None:
-        plt.savefig(savepath, bbox_inches='tight', dpi=300)  # 添加bbox_inches参数
+        plt.savefig(savepath, bbox_inches='tight', dpi=300)  # include bbox_inches parameter
         plt.close()
 
 

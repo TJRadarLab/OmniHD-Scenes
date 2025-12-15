@@ -7,8 +7,7 @@
 
 from typing import List, Optional
 
-#------------------映射成检测的标签名，不在评估范围的类别滤掉，这里是从原始标映射并选择需要的标签-------
-#-----------------目前直接过滤掉了一些类别，后期可以根据需要修改-----------------
+#------------------Map to detection label names; drop classes outside the evaluation scope (mapping from raw labels)-------
 def category_to_detection_name(category_name: str) -> Optional[str]:
     """
     Default label mapping from NewScenes to NewScenes detection classes.

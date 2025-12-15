@@ -78,13 +78,13 @@ def accumulate(gt_boxes: EvalBoxes,
     # ---------------------------------------------
     
     taken = set()  # Initially no gt bounding box is matched.
-    for ind in sortind:  #----按置信度由高到低循环每个该类别的预测框
+    for ind in sortind:  #----Iterate predictions of this class from highest to lowest confidence
         pred_box = pred_boxes_list[ind]
         min_dist = np.inf
         match_gt_idx = None
 
-        for gt_idx, gt_box in enumerate(gt_boxes[pred_box.sample_token]): #--循环该预测框对应的帧的真值
-            #----------为每个预测值找距离最近的真值，并且gt如果被一个对应了则不能被另一个目标对应-----------
+        for gt_idx, gt_box in enumerate(gt_boxes[pred_box.sample_token]): #--Loop GT boxes for this frame
+            #----------Find the closest GT for each prediction; a GT matched once cannot be reused-----------
             # Find closest match among ground truth boxes
             if gt_box.detection_name == class_name and not (pred_box.sample_token, gt_idx) in taken:
                 this_distance = dist_fcn(gt_box, pred_box)
@@ -100,27 +100,27 @@ def accumulate(gt_boxes: EvalBoxes,
             taken.add((pred_box.sample_token, match_gt_idx))
 
             #  Update tp, fp and confs.
-            #--------更新tp/fp/conf--------------
+            #--------Update tp/fp/conf--------------
             tp.append(1)
             fp.append(0)
             conf.append(pred_box.detection_score)
 
             # Since it is a match, update match data also.
-            #-------------匹配成功后，计算TP的其他误差--------------
+            #-------------After a successful match, compute other TP errors--------------
             gt_box_match = gt_boxes[pred_box.sample_token][match_gt_idx]
 
-            match_data['trans_err'].append(center_distance(gt_box_match, pred_box)) #--中心点xy距离
-            match_data['vel_err'].append(velocity_l2(gt_box_match, pred_box)) #--xy速度误差
-            match_data['scale_err'].append(1 - scale_iou(gt_box_match, pred_box)) #---尺度误差，是将两者最小的长宽高作为交，计算交并比
+            match_data['trans_err'].append(center_distance(gt_box_match, pred_box)) #--center xy distance
+            match_data['vel_err'].append(velocity_l2(gt_box_match, pred_box)) #--xy velocity error
+            match_data['scale_err'].append(1 - scale_iou(gt_box_match, pred_box)) #---scale error using min dimensions intersection-over-union
 
             # Barrier orientation is only determined up to 180 degree. (For cones orientation is discarded later)
-            period = np.pi if class_name == 'barrier' else 2 * np.pi #--这里都是2Pi
-            match_data['orient_err'].append(yaw_diff(gt_box_match, pred_box, period=period)) #---yaw角的差绝对值
-            #----无arr误差---
+            period = np.pi if class_name == 'barrier' else 2 * np.pi #--Here it is 2π for all
+            match_data['orient_err'].append(yaw_diff(gt_box_match, pred_box, period=period)) #---absolute yaw difference
+            #----No attr error---
             match_data['conf'].append(pred_box.detection_score)
 
         else:
-            # No match. Mark this as a false positive.没有匹配成功，标记为FP
+            # No match. Mark this as a false positive.
             tp.append(0)
             fp.append(1)
             conf.append(pred_box.detection_score)
@@ -140,33 +140,33 @@ def accumulate(gt_boxes: EvalBoxes,
     conf = np.array(conf)
 
     # Calculate precision and recall.
-    #------计算精确率和召回率-------------
+    #------Compute precision and recall-------------
     prec = tp / (fp + tp)
     rec = tp / float(npos)
-    #--------------召回率差值0-100--------
+    #--------------Interpolate recall 0-100 steps--------
     rec_interp = np.linspace(0, 1, DetectionMetricData.nelem)  # 101 steps, from 0% to 100% recall.
     prec = np.interp(rec_interp, rec, prec, right=0)
     conf = np.interp(rec_interp, rec, conf, right=0)
-    rec = rec_interp  #---召回率插值【0-1】101
+    rec = rec_interp  #---Recall interpolated to 101 points in [0,1]
 
     # ---------------------------------------------
     # Re-sample the match-data to match, prec, recall and conf.
     # ---------------------------------------------
-    #--------------根据分数从高到低的排序，累积取平均，再插值-----------------
+    #--------------Accumulate means by descending score, then interpolate-----------------
     for key in match_data.keys():
         if key == "conf":
             continue  # Confidence is used as reference to align with fp and tp. So skip in this step.
 
         else:
-            # For each match_data, we first calculate the accumulated mean.TP的累计均值
+            # For each match_data, we first calculate the accumulated mean.
             tmp = cummean(np.array(match_data[key]))
 
-            # Then interpolate based on the confidences. (Note reversing since np.interp needs increasing arrays)
-            #-----根据召回率和置信度的一百个插值点，对TP的累积均值进行插值，得到一百个点的TP误差----
+            # Then interpolate based on confidences (reverse arrays because np.interp expects increasing input).
+            #-----Interpolate accumulated TP means at 101 recall/confidence points----
             match_data[key] = np.interp(conf[::-1], match_data['conf'][::-1], tmp[::-1])[::-1]
 
     # ---------------------------------------------
-    # Done. Instantiate MetricData and return 都是recall插值得到的
+    # Done. Instantiate MetricData and return (all based on interpolated recall)
     # ---------------------------------------------
     return DetectionMetricData(recall=rec,
                                precision=prec,
@@ -177,7 +177,7 @@ def accumulate(gt_boxes: EvalBoxes,
                                orient_err=match_data['orient_err']
                                )
 
-#-------------计算单类在给定距离阈值下的AP-------------------
+#-------------Compute AP for one class at a given distance threshold-------------------
 def calc_ap(md: DetectionMetricData, min_recall: float, min_precision: float) -> float:
     """ Calculated average precision. """
 
@@ -190,12 +190,12 @@ def calc_ap(md: DetectionMetricData, min_recall: float, min_precision: float) ->
     prec[prec < 0] = 0
     return float(np.mean(prec)) / (1.0 - min_precision)
 
-#----------------计算单类给定阈值下的TP误差---------------
+#----------------Compute TP error for one class at a given threshold---------------
 def calc_tp(md: DetectionMetricData, min_recall: float, metric_name: str) -> float:
     """ Calculates true positive errors. """
 
     first_ind = round(100 * min_recall) + 1  # +1 to exclude the error at min recall.
-    #-----confidence = 0的第一个索引----
+    #-----First index where confidence == 0----
     last_ind = md.max_recall_ind  # First instance of confidence = 0 is index of max achieved recall.
     if last_ind < first_ind:
         return 1.0  # Assign 1 here. If this happens for all classes, the score for that TP metric will be 0.
