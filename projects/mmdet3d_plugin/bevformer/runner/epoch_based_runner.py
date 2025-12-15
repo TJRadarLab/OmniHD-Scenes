@@ -14,7 +14,6 @@ from mmcv.runner.utils import get_host_info
 from pprint import pprint
 from mmcv.parallel.data_container import DataContainer
 
-#-------------这个只有在tiny_fp16用了----
 @RUNNERS.register_module()
 class EpochBasedRunner_video(EpochBasedRunner):
     

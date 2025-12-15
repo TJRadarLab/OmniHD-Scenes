@@ -73,7 +73,7 @@ class TemporalSelfAttention(BaseModule):
         self.dropout = nn.Dropout(dropout)
         self.batch_first = batch_first
         self.fp16_enabled = False
-        #---------------2的指数，dim_per_head=256//8=32----------
+        #---------------power-of-two hint for dim_per_head----------
         # you'd better set dim_per_head to a power of 2
         # which is more efficient in the CUDA implementation
         def _is_power_of_2(n):
@@ -90,7 +90,7 @@ class TemporalSelfAttention(BaseModule):
                 'the dimension of each attention head a power of 2 '
                 'which is more efficient in our CUDA implementation.')
 
-        self.im2col_step = im2col_step  #--64,底层优化img2column
+        self.im2col_step = im2col_step  #--64
         self.embed_dims = embed_dims  #---256
         self.num_levels = num_levels  #--1
         self.num_heads = num_heads  #---8
@@ -104,11 +104,11 @@ class TemporalSelfAttention(BaseModule):
                                            num_bev_queue*num_heads * num_levels * num_points)
         self.value_proj = nn.Linear(embed_dims, embed_dims)
         self.output_proj = nn.Linear(embed_dims, embed_dims)
-        self.init_weights()  #----这里build的时候是否已经调用，在model.init_weights的时候又调用
-    #--------初始化权重------
+        self.init_weights()  # initialize weights
+    #--------initialize weights------
     def init_weights(self):
         """Default initialization for Parameters of Module."""
-        constant_init(self.sampling_offsets, 0.) #---采样点偏差设置为weight和bias=0
+        constant_init(self.sampling_offsets, 0.)
         thetas = torch.arange(
             self.num_heads,
             dtype=torch.float32) * (2.0 * math.pi / self.num_heads) 
@@ -121,7 +121,7 @@ class TemporalSelfAttention(BaseModule):
         for i in range(self.num_points):
             grid_init[:, :, i, :] *= i + 1
 
-        self.sampling_offsets.bias.data = grid_init.view(-1)#bias重新赋值(8,2,4,2)----
+        self.sampling_offsets.bias.data = grid_init.view(-1)
         constant_init(self.attention_weights, val=0., bias=0.)
         xavier_init(self.value_proj, distribution='uniform', bias=0.)
         xavier_init(self.output_proj, distribution='uniform', bias=0.)
@@ -175,7 +175,6 @@ class TemporalSelfAttention(BaseModule):
         Returns:
              Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
-        #----如果没有前bev，value就是query堆叠-------
         if value is None:
             assert self.batch_first
             bs, len_bev, c = query.shape
@@ -184,10 +183,10 @@ class TemporalSelfAttention(BaseModule):
             # value = torch.cat([query, query], 0)
 
         if identity is None:
-            identity = query  #--这个到最后才add,记录最初的query----python赋值是指针，不要直接操作里面的数值即可
+            identity = query  # original query, avoid in-place modification
         if query_pos is not None:
-            query = query + query_pos #----位置编码
-        if not self.batch_first: #----这里不运行----
+            query = query + query_pos
+        if not self.batch_first:
             # change to (bs, num_query ,embed_dims)
             query = query.permute(1, 0, 2)
             value = value.permute(1, 0, 2)
@@ -195,8 +194,7 @@ class TemporalSelfAttention(BaseModule):
         _, num_value, _ = value.shape  #----（2,22500,256）
         assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
         assert self.num_bev_queue == 2
-        #---这里要注意，value[:bs]是历史bev，后面这个query是增加了位置编码
-        #---value其实是历史bev和未加入pos的query的堆叠------
+        # Note: value[:bs] is historical BEV; query has positional encoding added
         query = torch.cat([value[:bs], query], -1) #----[1,22500,512]
         value = self.value_proj(value) #---[2,22500,256]
 
@@ -210,7 +208,7 @@ class TemporalSelfAttention(BaseModule):
         #-------[1,22500,8,2,1,4,2]
         sampling_offsets = sampling_offsets.view(
             bs, num_query, self.num_heads,  self.num_bev_queue, self.num_levels, self.num_points, 2)
-        #------[1,22500,8,2,4]，一维softmax生成4个权重，即每个参考点的权重
+        #------[1,22500,8,2,4]
         attention_weights = self.attention_weights(query).view(
             bs, num_query,  self.num_heads, self.num_bev_queue, self.num_levels * self.num_points)
         attention_weights = attention_weights.softmax(-1)
@@ -226,10 +224,10 @@ class TemporalSelfAttention(BaseModule):
             .reshape(bs*self.num_bev_queue, num_query, self.num_heads, self.num_levels, self.num_points).contiguous()
         sampling_offsets = sampling_offsets.permute(0, 3, 1, 2, 4, 5, 6)\
             .reshape(bs*self.num_bev_queue, num_query, self.num_heads, self.num_levels, self.num_points, 2)
-        #--------计算位置，参考点+(offsets除以宽高)，即参考点加归一化的偏移量[2,22500,8,1,4,2]---
+        #--------compute positions: reference + normalized offsets [2,22500,8,1,4,2]---
         if reference_points.shape[-1] == 2:
             offset_normalizer = torch.stack(
-                [spatial_shapes[..., 1], spatial_shapes[..., 0]], -1) #---这里是bev_w,bev_h
+                [spatial_shapes[..., 1], spatial_shapes[..., 0]], -1) #---(bev_w, bev_h)
             sampling_locations = reference_points[:, :, None, :, None, :] \
                 + sampling_offsets \
                 / offset_normalizer[None, None, None, :, None, :]
@@ -244,7 +242,7 @@ class TemporalSelfAttention(BaseModule):
                 f'Last dim of reference_points must be'
                 f' 2 or 4, but get {reference_points.shape[-1]} instead.')
         if torch.cuda.is_available() and value.is_cuda:
-            #-----使用 MultiScaleDeformableAttnFunction-------
+            # Use MultiScaleDeformableAttnFunction when available
             # using fp16 deformable attention is unstable because it performs many sum operations
             if value.dtype == torch.float16:
                 MultiScaleDeformableAttnFunction = MultiScaleDeformableAttnFunction_fp32
@@ -254,7 +252,7 @@ class TemporalSelfAttention(BaseModule):
                 value, spatial_shapes, level_start_index, sampling_locations,
                 attention_weights, self.im2col_step)
         else:
-            #-------可以看一下怎么实现的-------------------
+            # Fallback to python implementation
             output = multi_scale_deformable_attn_pytorch(
                 value, spatial_shapes, sampling_locations, attention_weights)
 

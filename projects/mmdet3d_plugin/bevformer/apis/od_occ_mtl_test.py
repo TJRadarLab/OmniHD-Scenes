@@ -26,7 +26,7 @@ import numpy as np
 import pycocotools.mask as mask_util
 
 
-#-------------这里对result进行了重写---------------------
+#-------------Custom rewrite of result handling---------------------
 def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False,bad_condition_occ=False):
     """Test model with multiple gpus.
     This method tests model with multiple gpus and collects the results
@@ -52,15 +52,15 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False,bad
     if rank == 0:
         prog_bar = mmcv.ProgressBar(len(dataset))  #---0/
     time.sleep(2)  # This line can prevent deadlock problem in some cases.
-    #-----------OCC恶劣天气评估-----------------
+    #-----------OCC bad weather evaluation-----------------
     if bad_condition_occ:
         newsc = NewScenes(version='v1.0-trainval', dataroot='data/NewScenes_Final', verbose=True)
         print("OCC恶劣天气评估!!!!!!!!!!!!!!!!!!!!!")
-    for i, data in enumerate(data_loader):  #---取数----
+    for i, data in enumerate(data_loader):  #---fetch data----
         with torch.no_grad():
             #---result=
-            result = model(return_loss=False, rescale=True, **data)  #--调用forward，这里有个rescale没作用--
-            #-----------OCC恶劣天气测试-----------------
+            result = model(return_loss=False, rescale=True, **data)  #--call forward; the 'rescale' has no effect here--
+            #-----------OCC bad weather testing-----------------
             if bad_condition_occ:
                 sample_token = data['img_metas'][0].data[0][0]['sample_idx']
                 scene_token = newsc.get('sample', sample_token)['scene_token']
@@ -80,7 +80,7 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False,bad
                     batch_size = len(result['occ_results'])
             else: 
                 batch_size = len(result) #--1
-                bbox_results.extend(result) #--加入到结果列表
+                bbox_results.extend(result) 
 
 
         if rank == 0:
@@ -108,10 +108,10 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False,bad
 
 def collect_results_cpu(result_part, size, tmpdir=None):
     rank, world_size = get_dist_info()
-    # create a tmp dir if it is not specified创建一个临时文件夹
+    # create a tmp dir if it is not specified
     if tmpdir is None:
         MAX_LEN = 512
-        # 32 is whitespace 512个32
+        # 32 is whitespace. 512 of them
         dir_tensor = torch.full((MAX_LEN, ),
                                 32,
                                 dtype=torch.uint8,
@@ -126,14 +126,14 @@ def collect_results_cpu(result_part, size, tmpdir=None):
         tmpdir = dir_tensor.cpu().numpy().tobytes().decode().rstrip()
     else:
         mmcv.mkdir_or_exist(tmpdir)
-    # dump the part result to the dir将每个卡每一部分结果写入到pkl
+    # dump the part result to the dir (write each GPU's part result to a pkl file)
     mmcv.dump(result_part, osp.join(tmpdir, f'part_{rank}.pkl'))
-    dist.barrier()  #---分布式的同步点，等待每个进程结束--
+    dist.barrier()  #---Distributed synchronization barrier, wait for each process to finish--
     # collect all parts
     if rank != 0:
         return None
     else:
-        # load results of all parts from tmp dir组合每个进程的结果，生成最终结果----
+        # load results of all parts from tmp dir (combine each process's results to generate the final result) ----
         part_list = []
         for i in range(world_size):
             part_file = osp.join(tmpdir, f'part_{i}.pkl')

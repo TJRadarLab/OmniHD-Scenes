@@ -66,14 +66,14 @@ class PerceptionTransformer(BaseModule):
         self.two_stage_num_proposals = two_stage_num_proposals
         self.init_layers()
         self.rotate_center = rotate_center
-    #-------初始化层包括levelemb，camemb，参考点，canbus，----
+    
     def init_layers(self):
         """Initialize layers of the Detr3DTransformer."""
         self.level_embeds = nn.Parameter(torch.Tensor(
             self.num_feature_levels, self.embed_dims)) #--(4,256)
         self.cams_embeds = nn.Parameter(
             torch.Tensor(self.num_cams, self.embed_dims)) #--(6,256)
-        self.reference_points = nn.Linear(self.embed_dims, 3) #---用来生成obj_q参考点--
+        self.reference_points = nn.Linear(self.embed_dims, 3)
         self.can_bus_mlp = nn.Sequential(
             nn.Linear(18, self.embed_dims // 2),
             nn.ReLU(inplace=True),
@@ -85,25 +85,21 @@ class PerceptionTransformer(BaseModule):
 
     def init_weights(self):
         """Initialize the transformer weights."""
-        ##这里会先逐层参数进行xavier初始化，只考虑大于一维的weight，bias一般不考虑--
-        #----所有的模块都会循环一遍，然后for m in self.modules():会再调用其本身的初始化
+        
         for p in self.parameters(): 
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
-        #----PerceptionTransformer,encoder,decoder,reference_points.can_bus_mlp
-        #-----并且逐层迭代，内部的linear等层已经在下列层的init_weights中初始化-------
         for m in self.modules():  
             if isinstance(m, MSDeformableAttention3D) or isinstance(m, TemporalSelfAttention) \
                     or isinstance(m, CustomMSDeformableAttention):
                 try:
                     m.init_weight()
                 except AttributeError:
-                    m.init_weights()  #---调用的这个---
+                    m.init_weights()
         normal_(self.level_embeds)
         normal_(self.cams_embeds)
         xavier_init(self.reference_points, distribution='uniform', bias=0.)
-        #---这个地方没调用这个，nn.Sequential没有weights和bias属性，这里不管了，
-        #----for p in self.parameters():中对weights初始化过一次了 ------
+        
         xavier_init(self.can_bus_mlp, distribution='uniform', bias=0.) 
 
     @auto_fp16(apply_to=('mlvl_feats', 'bev_queries', 'prev_bev', 'bev_pos'))
@@ -122,19 +118,17 @@ class PerceptionTransformer(BaseModule):
         """
 
         bs = mlvl_feats[0].size(0)  #--（1,6,256,23,40）
-        #-----这里注意传进来的时候是nn.Parameter,requires_grad是true，经过---
-        #-----下面操作就变成一个tensor了，requires_grad是false----
+        
         bev_queries = bev_queries.unsqueeze(1).repeat(1, bs, 1) #--重复batch维，（22500，1,256）
         bev_pos = bev_pos.flatten(2).permute(2, 0, 1) #---(22500,1,256)
-
-    #---------------------这里对于历史BEV的操作还要再细节看-------------------------
+    
         # obtain rotation angle and shift with ego motion
-        #----通过ego pose算得的与前一帧的位置差-----
+        
         delta_x = np.array([each['can_bus'][0]
                            for each in kwargs['img_metas']])
         delta_y = np.array([each['can_bus'][1]
                            for each in kwargs['img_metas']])
-        #--------全局坐标系下yaw角度，332.57---------
+        
         ego_angle = np.array(
             [each['can_bus'][-2] / np.pi * 180 for each in kwargs['img_metas']])
         grid_length_y = grid_length[0] #---0.682666
@@ -142,9 +136,9 @@ class PerceptionTransformer(BaseModule):
         translation_length = np.sqrt(delta_x ** 2 + delta_y ** 2)
         translation_angle = np.arctan2(delta_y, delta_x) / np.pi * 180
         # bev_angle = ego_angle - translation_angle
-        bev_angle = translation_angle - ego_angle #---修改
+        bev_angle = translation_angle - ego_angle
         shift_y = translation_length * \
-            np.sin(bev_angle / 180 * np.pi) / grid_length_y / bev_h  #---车头前x左y
+            np.sin(bev_angle / 180 * np.pi) / grid_length_y / bev_h
         shift_x = translation_length * \
             np.cos(bev_angle / 180 * np.pi) / grid_length_x / bev_w
         # shift_y = translation_length * \
@@ -162,7 +156,7 @@ class PerceptionTransformer(BaseModule):
             if self.rotate_prev_bev:
                 for i in range(bs):
                     # num_prev_bev = prev_bev.size(1)
-                    rotation_angle = kwargs['img_metas'][i]['can_bus'][-1] #---后帧与前帧的yaw差
+                    rotation_angle = kwargs['img_metas'][i]['can_bus'][-1]
     
                     tmp_prev_bev = prev_bev[:, i].reshape(
                         bev_h, bev_w, -1).permute(2, 0, 1)
@@ -171,7 +165,7 @@ class PerceptionTransformer(BaseModule):
                     # draw_bev(tmp_prev_bev,'bevfore_rot')
                    
                     tmp_prev_bev = rotate(tmp_prev_bev, rotation_angle,
-                                          center=self.rotate_center) #----这里应该根据bev中心点--
+                                          center=self.rotate_center) 
                    
                     # draw_bev(tmp_prev_bev,'after_rot')
 
@@ -187,7 +181,6 @@ class PerceptionTransformer(BaseModule):
 
         feat_flatten = []
         spatial_shapes = []
-        #----这里的特征加入了相机嵌入和多尺度特征层嵌入，没明白啥意思都是初始化的变量----
         for lvl, feat in enumerate(mlvl_feats):
             bs, num_cam, c, h, w = feat.shape  #--[1,6,256,23,40]
             spatial_shape = (h, w)
@@ -207,7 +200,6 @@ class PerceptionTransformer(BaseModule):
 
         feat_flatten = feat_flatten.permute(
             0, 2, 1, 3)  # (num_cam, H*W, bs, embed_dims) [6,920,1,256]
-        #-----这里进入BEVFormerEncoder进行编码---
         bev_embed = self.encoder(
             bev_queries,  #----[22500,1,256]
             feat_flatten, #----[6,920,1,256]
@@ -283,27 +275,23 @@ class PerceptionTransformer(BaseModule):
             bev_pos=bev_pos, #--torch.Size([1, 256, 150, 150])
             prev_bev=prev_bev, #--[1,22500,256]
             **kwargs)  # bev_embed shape: bs, bev_h*bev_w, embed_dims
-        #---可视化最终bev------
 
         # final_bev = bev_embed[0].reshape(bev_h,bev_w,-1).permute(2, 0, 1)
         # from projects.mmdet3d_plugin.models.utils.visual import draw_bev
         # draw_bev(final_bev,'final_bevformer')
         
-        #----下面是obj q----
         bs = mlvl_feats[0].size(0)
         query_pos, query = torch.split(
             object_query_embed, self.embed_dims, dim=1) #---[900,256][900,256]
         query_pos = query_pos.unsqueeze(0).expand(bs, -1, -1)#---[1,900,256]
         query = query.unsqueeze(0).expand(bs, -1, -1)#---[1,900,256]
-        #-----------用linear生成参考点------
         reference_points = self.reference_points(query_pos)#---[1,900,3]
-        reference_points = reference_points.sigmoid() #---映射到0到1，和不一定为1
-        init_reference_out = reference_points #----------初始参考点#---[1,900,3]
+        reference_points = reference_points.sigmoid() 
+        init_reference_out = reference_points 
 
         query = query.permute(1, 0, 2) #--[900,1,256]
         query_pos = query_pos.permute(1, 0, 2)#--[900,1,256]
         bev_embed = bev_embed.permute(1, 0, 2)#--#--torch.Size([22500, 1,256])
-        #-------进入'DetectionTransformerDecoder'------
         inter_states, inter_references = self.decoder(
             query=query,
             key=None,

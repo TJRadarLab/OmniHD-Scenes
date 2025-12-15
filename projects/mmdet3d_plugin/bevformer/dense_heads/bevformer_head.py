@@ -54,31 +54,28 @@ class BEVFormerHead(DETRHead):
             self.code_weights = code_weights
         else:
             self.code_weights = [1.0, 1.0, 1.0,
-                                 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2] #---vxvy是0.2
+                                 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2] #---vx and vy weights are 0.2
 
         self.bbox_coder = build_bbox_coder(bbox_coder)#--NMSFreeCoder
         self.pc_range = self.bbox_coder.pc_range  
-        self.real_w = self.pc_range[3] - self.pc_range[0] #--102.4，这里是xmax-xmin
-        self.real_h = self.pc_range[4] - self.pc_range[1] #--102.4，这里是ymax-ymin
-        self.num_cls_fcs = num_cls_fcs - 1 #---这个是啥，这个变量没用到----
+        self.real_w = self.pc_range[3] - self.pc_range[0] #--102.4, this is xmax - xmin
+        self.real_h = self.pc_range[4] - self.pc_range[1] #--102.4, this is ymax - ymin
+        self.num_cls_fcs = num_cls_fcs - 1 #---unused variable (kept for compatibility)----
         super(BEVFormerHead, self).__init__(
             *args, transformer=transformer, **kwargs)
-        #--bbox权重*编码权重------
-        #----init中的变量不需要传梯度的尽量用nn.Parameter方便维护，模型保存和加载需要用到---
         self.code_weights = nn.Parameter(torch.tensor(
-            self.code_weights, requires_grad=False), requires_grad=False) #--tensor里面没必要写requires_grad,nn.Parameter需要指定require
-    #---------初始化分类和回归层，最终分类和回归都是10维---------
+            self.code_weights, requires_grad=False), requires_grad=False) #--No need to set requires_grad inside the tensor; nn.Parameter controls it
     def _init_layers(self): 
         """Initialize classification branch and regression branch of head."""
-        cls_branch = [] #--LNRLNRL
-        for _ in range(self.num_reg_fcs):  #--self.num_reg_fcs=2,父类中默认值
+        cls_branch = [] #--Sequence: Linear -> LayerNorm -> ReLU repeated
+        for _ in range(self.num_reg_fcs):  #--self.num_reg_fcs=2 (default in base class)
             cls_branch.append(Linear(self.embed_dims, self.embed_dims))
             cls_branch.append(nn.LayerNorm(self.embed_dims))
             cls_branch.append(nn.ReLU(inplace=True))
         cls_branch.append(Linear(self.embed_dims, self.cls_out_channels))
         fc_cls = nn.Sequential(*cls_branch)
 
-        reg_branch = [] #---LRLRL
+        reg_branch = [] 
         for _ in range(self.num_reg_fcs):
             reg_branch.append(Linear(self.embed_dims, self.embed_dims))
             reg_branch.append(nn.ReLU())
@@ -88,13 +85,8 @@ class BEVFormerHead(DETRHead):
         def _get_clones(module, N):
             return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
-        # last reg_branch is used to generate proposal from
-        # encode feature map when as_two_stage is True.
-        #-----这里的as_two_stage都是false，num_pred是decoder.num_layers的个数-----
         num_pred = (self.transformer.decoder.num_layers + 1) if \
             self.as_two_stage else self.transformer.decoder.num_layers
-        #------这里都是true，decoder几层就复制几份，这两者区别是else中每个模块指向---
-        #------同一对象，修改一个会相互影响------
         if self.with_box_refine:
             self.cls_branches = _get_clones(fc_cls, num_pred)
             self.reg_branches = _get_clones(reg_branch, num_pred)
@@ -103,20 +95,16 @@ class BEVFormerHead(DETRHead):
                 [fc_cls for _ in range(num_pred)])
             self.reg_branches = nn.ModuleList(
                 [reg_branch for _ in range(num_pred)])
-        #------------这里初始化Embedding，包括bevquery和objquery，其weights为保存的参数---
-        #-----------embedding本质上是词向量表-------
         if not self.as_two_stage:
             self.bev_embedding = nn.Embedding(
                 self.bev_h * self.bev_w, self.embed_dims)
             self.query_embedding = nn.Embedding(self.num_query,
-                                                self.embed_dims * 2) #---后面解码的时候分开
-    #---------最顶层的init_weights初始权重，这里会在train文件model.init_weights()
-    #---------会在basemodule中调用子类的初始化权重的方法-----------
+                                                self.embed_dims * 2) 
     def init_weights(self):
         """Initialize weights of the DeformDETR head."""
         self.transformer.init_weights()
-        if self.loss_cls.use_sigmoid:  #---true,这里不理解为啥最后一个linear的偏差设置成这个10维的常数bias=-4.5951
-            bias_init = bias_init_with_prob(0.01) #---一个固定的bias=-4.59511..--
+        if self.loss_cls.use_sigmoid:  
+            bias_init = bias_init_with_prob(0.01) 
             for m in self.cls_branches:
                 nn.init.constant_(m[-1].bias, bias_init) 
 
@@ -137,19 +125,15 @@ class BEVFormerHead(DETRHead):
                 head with normalized coordinate format (cx, cy, w, l, cz, h, theta, vx, vy). \
                 Shape [nb_dec, bs, num_query, 9].
         """
-        #----（1,6,256,23,40）---
+        #---- (1,6,256,23,40) ---
         bs, num_cam, _, _, _ = mlvl_feats[0].shape
         dtype = mlvl_feats[0].dtype #--torch.float32
-        #-----id地址指向仍是原始的embedding中的weight-------
-        #-------objQ和bevQ，nn.Parameter类更新参数--------------
         object_query_embeds = self.query_embedding.weight.to(dtype)  #--（900，,512）
         bev_queries = self.bev_embedding.weight.to(dtype) #--（22500,256）
-        #------(1,150,150)全0-----
+        #------(1,150,150) all zeros-----
         bev_mask = torch.zeros((bs, self.bev_h, self.bev_w),
                                device=bev_queries.device).to(dtype)
         bev_pos = self.positional_encoding(bev_mask).to(dtype) #---(1,256,150,150)
-        #--------仅用来获得历史BEV----------
-        #--------调用PerceptionTransformer中的get_bev_features----
         if only_bev:  # only use encoder to obtain BEV features, TODO: refine the workaround
             return self.transformer.get_bev_features(
                 mlvl_feats,
@@ -162,7 +146,7 @@ class BEVFormerHead(DETRHead):
                 img_metas=img_metas,
                 prev_bev=prev_bev,
             )
-        else: #--------获得完历史bev后前传------
+        else: #--------After obtaining historical BEV, run forward pass------
             outputs = self.transformer(
                 mlvl_feats, #--torch.Size([1, 6, 256, 23, 40])
                 bev_queries,#--#--（22500,256）
@@ -172,34 +156,30 @@ class BEVFormerHead(DETRHead):
                 grid_length=(self.real_h / self.bev_h,#--102.4/150=0.682666
                              self.real_w / self.bev_w),#--102.4/150=0.682666
                 bev_pos=bev_pos,#---(1,256,150,150)
-                reg_branches=self.reg_branches if self.with_box_refine else None,  #这里有
-                cls_branches=self.cls_branches if self.as_two_stage else None, #--这里是None
+                reg_branches=self.reg_branches if self.with_box_refine else None,  #--reg_branches passed when box refine enabled
+                cls_branches=self.cls_branches if self.as_two_stage else None, #--cls_branches is None in our setup
                 img_metas=img_metas,
                 prev_bev=prev_bev #--torch.Size([1, 22500, 256])
         )
-    #--torch.Size([22500, 1,256]),torch.Size([6, 900, 1, 256]),
-    #----torch.Size([1, 900, 3]),torch.Size([6, 1, 900, 3])
-        #------这里理解应该是6层DetrTransformerDecoderLayer-----
-    #------返回bev_embed(encoder编码特征), inter_states（decoder中间特征）, 
-    #-------init_reference_out（PerceptionTransformer中初始参考点）, inter_references_out（decoder中每层生成的参考点）---
-    #------[22500,1,256], torch.Size([6, 900, 1, 256]),torch.Size([1, 900, 3]),torch.Size([6,1, 900, 3])
-    #-----这里用reg和cls分支，之所以reg_branches传入是为了迭代obj_query的xyz位置-----
+    #------[22500,1,256], torch.Size([6, 900, 1, 256]), torch.Size([1, 900, 3]), torch.Size([6,1, 900, 3])
+    #-----reg_branches and cls_branches are used here; reg_branches are passed to iteratively refine object query xyz positions-----
         bev_embed, hs, init_reference, inter_references = outputs
         hs = hs.permute(0, 2, 1, 3)  #---torch.Size([6, 1,900, 256])
         outputs_classes = []
         outputs_coords = []
-        for lvl in range(hs.shape[0]):#--6，这个地方是因为第一层reg回归的结果加初始参考点才是第一层预测结果
+        for lvl in range(hs.shape[0]):#--6: the first-layer prediction is reg output added to initial references
             if lvl == 0:
                 reference = init_reference
             else:
                 reference = inter_references[lvl - 1]
             reference = inverse_sigmoid(reference)  #---[1,900,3]
-            outputs_class = self.cls_branches[lvl](hs[lvl])  #---[1,900,10],原始数值没有softmax和sigmoid
+            outputs_class = self.cls_branches[lvl](hs[lvl])  #---[1,900,10], raw logits (no softmax/sigmoid)
             tmp = self.reg_branches[lvl](hs[lvl])#---[1,900,10]
 
             # TODO: check the shape of reference
             assert reference.shape[-1] == 3
-            #--------xyz网络预测的偏差，再加参考点为每个位置实际比例，再sigmoid比例按范围相乘---
+            #--------The network predicts offsets for xyz; offsets are added to reference points,
+            #--------then passed through sigmoid and scaled to the actual coordinate ranges---
             #----------(cx, cy, w, l, cz, h, rot.sin(), rot.cos(), vx, vy)
             tmp[..., 0:2] += reference[..., 0:2]
             tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
@@ -217,8 +197,8 @@ class BEVFormerHead(DETRHead):
             outputs_classes.append(outputs_class)
             outputs_coords.append(outputs_coord)
 
-        outputs_classes = torch.stack(outputs_classes)  #---[6,1,900,10] 类别
-        outputs_coords = torch.stack(outputs_coords) #---[6,1,900,10] 属性
+        outputs_classes = torch.stack(outputs_classes)  #---[6,1,900,10] classes
+        outputs_coords = torch.stack(outputs_coords) #---[6,1,900,10] box attributes
 
         outs = {
             'bev_embed': bev_embed,
@@ -263,36 +243,31 @@ class BEVFormerHead(DETRHead):
         num_bboxes = bbox_pred.size(0) #---900
         # assigner and sampler
         gt_c = gt_bboxes.shape[-1] #--9
-        #-----调用 HungarianAssigner3D，900个objQ和真值的cost最小，返回索引---------
-        #----gt_inds维度900，大部分为0，对应第N+1个真值，一帧真值一共31个obj的话，对应值为32，这里是为了sampler时判断非零元素，此外sampler中又进行了-1操作，即该Q对应的gt索引---
-        
+
         assign_result = self.assigner.assign(bbox_pred, cls_score, gt_bboxes,
                                              gt_labels, gt_bboxes_ignore)
 
         sampling_result = self.sampler.sample(assign_result, bbox_pred,
                                               gt_bboxes)
-        pos_inds = sampling_result.pos_inds #---torch.Size([31])，记录900个QPOS的索引
-        neg_inds = sampling_result.neg_inds #---torch.Size([869])，记录900个Qneg的索引
+        pos_inds = sampling_result.pos_inds 
+        neg_inds = sampling_result.neg_inds 
 
-        # label targets，900维度，每个是10----
         labels = gt_bboxes.new_full((num_bboxes,),
                                     self.num_classes,
                                     dtype=torch.long)
-        #---------------sampling_result.pos_assigned_gt_inds进行了-1操作，即对应gt哪一个的索引---
-        #--------这里将对应gt的标签赋给Q,长度900。label weights全1，bbox_weights正样本是1-----------
         labels[pos_inds] = gt_labels[sampling_result.pos_assigned_gt_inds]
-        label_weights = gt_bboxes.new_ones(num_bboxes)  #-----900，全1
+        label_weights = gt_bboxes.new_ones(num_bboxes)  
 
         # bbox targets
-        bbox_targets = torch.zeros_like(bbox_pred)[..., :gt_c]  #---torch.Size([900, 9])全0
-        bbox_weights = torch.zeros_like(bbox_pred) #---torch.Size([900, 10])全0
-        bbox_weights[pos_inds] = 1.0 #---对应正样本权重为1
+        bbox_targets = torch.zeros_like(bbox_pred)[..., :gt_c] 
+        bbox_weights = torch.zeros_like(bbox_pred) 
+        bbox_weights[pos_inds] = 1.0 
 
-        # DETR #----正样本Q处的真值为对应真值
+        # DETR #----For positive queries, bbox target equals the matched gt bbox
         bbox_targets[pos_inds] = sampling_result.pos_gt_bboxes
         return (labels, label_weights, bbox_targets, bbox_weights,
                 pos_inds, neg_inds)
-    #--------计算reg和cls的targets---------
+
     def get_targets(self,
                     cls_scores_list,
                     bbox_preds_list,
@@ -333,7 +308,7 @@ class BEVFormerHead(DETRHead):
         num_imgs = len(cls_scores_list) #--1
         gt_bboxes_ignore_list = [
             gt_bboxes_ignore_list for _ in range(num_imgs)
-        ]  #----None
+        ]  
 
         (labels_list, label_weights_list, bbox_targets_list,
          bbox_weights_list, pos_inds_list, neg_inds_list) = multi_apply(
@@ -343,7 +318,7 @@ class BEVFormerHead(DETRHead):
         num_total_neg = sum((inds.numel() for inds in neg_inds_list))
         return (labels_list, label_weights_list, bbox_targets_list,
                 bbox_weights_list, num_total_pos, num_total_neg)
-    #---------每一层的loss---------
+
     def loss_single(self,
                     cls_scores,
                     bbox_preds,
@@ -374,11 +349,11 @@ class BEVFormerHead(DETRHead):
         cls_reg_targets = self.get_targets(cls_scores_list, bbox_preds_list,
                                            gt_bboxes_list, gt_labels_list,
                                            gt_bboxes_ignore_list)
-        #--------label_list:[torch.Size([900])]记录了正Q处的标签，其余位置均是10
-        #--------label_weights_list:[torch.Size([900])]，记录了label权重，全是1
-        #--------bbox_targets_list:[torch.Size([900, 9])],记录了正Q处的9维真值，其余为0
-        #--------bbox_weights_list：[torch.Size([900, 10])],正Q处全为1，其余为0
-        #-------num_total_pos=31，gt个数，num_total_neg=869neg个数
+        #--------labels_list: [torch.Size([900])] records labels at positive queries; other positions hold background index
+        #--------label_weights_list: [torch.Size([900])] records label weights, all ones
+        #--------bbox_targets_list: [torch.Size([900, 9])] positive queries contain 9-d gt values; others zero
+        #--------bbox_weights_list: [torch.Size([900, 10])] bbox weights: ones at positive queries, zeros elsewhere
+        #-------num_total_pos=31 number of positive samples (gt count), num_total_neg=869 number of negatives
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
          num_total_pos, num_total_neg) = cls_reg_targets
         labels = torch.cat(labels_list, 0) #--torch.Size([900]
@@ -386,36 +361,35 @@ class BEVFormerHead(DETRHead):
         bbox_targets = torch.cat(bbox_targets_list, 0) #--torch.Size([900, 9])
         bbox_weights = torch.cat(bbox_weights_list, 0) #--torch.Size([900, 10])
 
-        # classification loss FocalLoss中是use_sigmoid=True，则为类别数量10，否则+1
+        # classification loss: when FocalLoss use_sigmoid=True, class count is self.cls_out_channels (e.g., 10), otherwise +1
         cls_scores = cls_scores.reshape(-1, self.cls_out_channels)#--torch.Size([900, 10])
         # construct weighted avg_factor to match with the official DETR repo
-        #--与DETR匹配，其实只算正Q数量，这里为31---
+        #--To match DETR, avg factor counts positive queries only; here it's 31---
         cls_avg_factor = num_total_pos * 1.0 + \
             num_total_neg * self.bg_cls_weight
         if self.sync_cls_avg_factor: #----获取不同GPU上的真值
             cls_avg_factor = reduce_mean(
                 cls_scores.new_tensor([cls_avg_factor]))
 
-        cls_avg_factor = max(cls_avg_factor, 1) #----这里是31
+        cls_avg_factor = max(cls_avg_factor, 1) #----here it's 31
         loss_cls = self.loss_cls(
             cls_scores, labels, label_weights, avg_factor=cls_avg_factor) #--focal loss真值背景为最大值---tensor[2.8006]
 
-        # Compute the average number of gt boxes accross all gpus, for
-        # normalization purposes计算每个GPU平均gt的数量---------------
+        # Compute the average number of gt boxes across all GPUs for
+        # normalization purposes
         num_total_pos = loss_cls.new_tensor([num_total_pos])
         num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
 
         # regression L1 loss   torch.Size([900, 10])
         bbox_preds = bbox_preds.reshape(-1, bbox_preds.size(-1))
-        normalized_bbox_targets = normalize_bbox(bbox_targets, self.pc_range)  #--wlh取对数-(cx, cy, w, l, cz, h, rot.sin(), rot.cos(), vx, vy)
+        normalized_bbox_targets = normalize_bbox(bbox_targets, self.pc_range)  #--normalized targets format: (cx, cy, w, l, cz, h, sin(rot), cos(rot), vx, vy)
         isnotnan = torch.isfinite(normalized_bbox_targets).all(dim=-1)
-        bbox_weights = bbox_weights * self.code_weights   #-------对应正Q的vxvy处是0.2
-
+        bbox_weights = bbox_weights * self.code_weights   #-------vx and vy weights for positive queries are 0.2
         loss_bbox = self.loss_bbox(
             bbox_preds[isnotnan, :10], normalized_bbox_targets[isnotnan,
                                                                :10], bbox_weights[isnotnan, :10],
             avg_factor=num_total_pos)
-        if digit_version(TORCH_VERSION) >= digit_version('1.8'): #---默认将NAN替换0
+        if digit_version(TORCH_VERSION) >= digit_version('1.8'): #---default: replace NaN with 0
             loss_cls = torch.nan_to_num(loss_cls)
             loss_bbox = torch.nan_to_num(loss_bbox)
         return loss_cls, loss_bbox
@@ -465,27 +439,24 @@ class BEVFormerHead(DETRHead):
 
         num_dec_layers = len(all_cls_scores)  #--6
         device = gt_labels_list[0].device
-        #------------底边中点变成中心点，tensor输入[tensor(N_obj,9)]，
-        #----------xyz，xsize，ysize，zsize，yaw，vxvy.[wlh]------
+        #------------Convert bottom-center to gravity center; tensor input [tensor(N_obj,9)],
+        #----------format: (x, y, z, w, l, h, yaw, vx, vy) ------
         gt_bboxes_list = [torch.cat(
             (gt_bboxes.gravity_center, gt_bboxes.tensor[:, 3:]),
             dim=1).to(device) for gt_bboxes in gt_bboxes_list]
-        #-------复制6层真值-----------------
+        #-------Duplicate ground-truth list for each decoder layer (num_dec_layers times)-----------------
         all_gt_bboxes_list = [gt_bboxes_list for _ in range(num_dec_layers)]
         all_gt_labels_list = [gt_labels_list for _ in range(num_dec_layers)]
         all_gt_bboxes_ignore_list = [
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]
-        #--------------计算每一层的loss并合并--------------
-        #----losses_cls[tensor([2.0068]),tensor([2.2291]),...6个]---
-        #----losses_cls[tensor(2.0629),tensor(2.0463)...6个]---
         losses_cls, losses_bbox = multi_apply(
             self.loss_single, all_cls_scores, all_bbox_preds,
             all_gt_bboxes_list, all_gt_labels_list,
             all_gt_bboxes_ignore_list)
 
         loss_dict = dict()
-        # loss of proposal generated from encode feature map.不运行
+        # loss of proposals generated from encoded feature map. Not used by default
         if enc_cls_scores is not None:
             binary_labels_list = [
                 torch.zeros_like(gt_labels_list[i])
@@ -496,12 +467,10 @@ class BEVFormerHead(DETRHead):
                                  gt_bboxes_list, binary_labels_list, gt_bboxes_ignore)
             loss_dict['enc_loss_cls'] = enc_loss_cls
             loss_dict['enc_loss_bbox'] = enc_losses_bbox
-        #--------最后一层的损失------------------
-        # loss from the last decoder layer
+        #--------Loss from the last decoder layer------------------
         loss_dict['loss_cls'] = losses_cls[-1] #----tensor([2.0048])
         loss_dict['loss_bbox'] = losses_bbox[-1] #----tensor(2.1714)
-        #--------其他层的损失------------
-        # loss from other decoder layers
+        #--------Losses from other decoder layers------------
         num_dec_layer = 0
         for loss_cls_i, loss_bbox_i in zip(losses_cls[:-1],
                                            losses_bbox[:-1]):
@@ -519,7 +488,7 @@ class BEVFormerHead(DETRHead):
         Returns:
             list[dict]: Decoded bbox, scores and labels after nms.
         """
-        #---[{"bboxes:","scores:","labels:"}]
+        #--- [{'bboxes':..., 'scores':..., 'labels':...}]
         preds_dicts = self.bbox_coder.decode(preds_dicts)
 
         num_samples = len(preds_dicts) #--batch=1
@@ -527,9 +496,9 @@ class BEVFormerHead(DETRHead):
         for i in range(num_samples):
             preds = preds_dicts[i]
             bboxes = preds['bboxes']
-            #----转到底边中点------------
+            #----Convert center z to bottom z (bottom center)------------
             bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
-            #--------转成LIDARinstance3DBoxes-----------
+            #--------Convert to LIDARInstance3DBoxes-----------
             code_size = bboxes.shape[-1]
             bboxes = img_metas[i]['box_type_3d'](bboxes, code_size)
             scores = preds['scores']

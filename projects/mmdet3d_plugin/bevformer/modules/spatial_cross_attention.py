@@ -68,7 +68,7 @@ class SpatialCrossAttention(BaseModule):
         self.batch_first = batch_first
         self.init_weight()
 
-    def init_weight(self): #----这里在模型初始化init的时候已经赋予权重----
+    def init_weight(self):
         """Default initialization for Parameters of Module."""
         xavier_init(self.output_proj, distribution='uniform', bias=0.)
     
@@ -126,27 +126,27 @@ class SpatialCrossAttention(BaseModule):
             value = key
 
         if residual is None:
-            inp_residual = query # 输入的Q，后面add--torch.Size([1, 22500, 256])
-            slots = torch.zeros_like(query)#----torch.Size([1, 22500, 256])全0
+            inp_residual = query  # input Q, will be added back later
+            slots = torch.zeros_like(query)  # torch.Size([1, 22500, 256])
         if query_pos is not None: #--None
             query = query + query_pos
 
         bs, num_query, _ = query.size()
 
-        D = reference_points_cam.size(3) #---torch.Size([6, 1, 22500, 4, 2])4层高度
+        D = reference_points_cam.size(3) # torch.Size([6, 1, 22500, 4, 2]) number of height anchors
         indexes = []
-        for i, mask_per_img in enumerate(bev_mask):#----遍历第一个维度--[6,1,225000,4]->--[1,225000,4]
+        for i, mask_per_img in enumerate(bev_mask):
             index_query_per_img = mask_per_img[0].sum(-1).nonzero().squeeze(-1)
-            indexes.append(index_query_per_img) #---torch.Size([3546])非零元素的索引
+            indexes.append(index_query_per_img)  # torch.Size([3546]) indices of non-zero elements
         max_len = max([len(each) for each in indexes]) #---5439
 
         # each camera only interacts with its corresponding BEV queries. This step can  greatly save GPU memory.
-        #--每个camera只与它对应的BEV Q交互，生成最大长度的Q--
+        # each camera only interacts with its corresponding BEV queries to save memory
         queries_rebatch = query.new_zeros(
             [bs, self.num_cams, max_len, self.embed_dims]) #--torch.Size([1, 6, 5439, 256])
         reference_points_rebatch = reference_points_cam.new_zeros(
             [bs, self.num_cams, max_len, D, 2]) #--torch.Size([1, 6, 5439, 4, 2])
-        #-----这里对每个相机，参考点打在对应相机上的Q和参考点索引，减少计算量---
+        # reorder queries and reference points per camera to reduce computation
         for j in range(bs):
             for i, reference_points_per_img in enumerate(reference_points_cam):   
                 index_query_per_img = indexes[i]
@@ -154,7 +154,7 @@ class SpatialCrossAttention(BaseModule):
                 reference_points_rebatch[j, i, :len(index_query_per_img)] = reference_points_per_img[j, index_query_per_img]
 
         num_cams, l, bs, embed_dims = key.shape #  torch.Size([6, 920, 1, 256])
-        #----这个k和value一样的后面key还是没有用到---
+        # key and value are rearranged for per-camera processing
         key = key.permute(2, 0, 1, 3).reshape(
             bs * self.num_cams, l, self.embed_dims) #--torch.Size([6, 920, 256])
         value = value.permute(2, 0, 1, 3).reshape(
@@ -163,16 +163,16 @@ class SpatialCrossAttention(BaseModule):
         queries = self.deformable_attention(query=queries_rebatch.view(bs*self.num_cams, max_len, self.embed_dims), key=key, value=value,
                                             reference_points=reference_points_rebatch.view(bs*self.num_cams, max_len, D, 2), spatial_shapes=spatial_shapes,
                                             level_start_index=level_start_index).view(bs, self.num_cams, max_len, self.embed_dims)
-        #------这里先对对应的Q位置求和，因为有可能不同图像有重叠，所以是先加起来取和求平均----
+        # accumulate queries across cameras for overlapping image regions
         for j in range(bs):
             for i, index_query_per_img in enumerate(indexes):
                 slots[j, index_query_per_img] += queries[j, i, :len(index_query_per_img)]
-
-        count = bev_mask.sum(-1) > 0 #------[6,1,22500,4]-->[6,1,22500],先把一个pillar所有参考点都没投影在图像的设为false，其他为true，相当于每个query能对应到的图像
-        count = count.permute(1, 2, 0).sum(-1) #--[1,22500,6]-->[1,22500],每个query能对应的图像数量
-        count = torch.clamp(count, min=1.0) #--限制在大于等于1
-        slots = slots / count[..., None] #--相当于除以击中的相机个数
-        slots = self.output_proj(slots) #--[1,22500,256]
+        # compute number of valid cameras per query
+        count = bev_mask.sum(-1) > 0
+        count = count.permute(1, 2, 0).sum(-1)
+        count = torch.clamp(count, min=1.0)
+        slots = slots / count[..., None]
+        slots = self.output_proj(slots)
 
         return self.dropout(slots) + inp_residual
 
@@ -253,7 +253,7 @@ class MSDeformableAttention3D(BaseModule):
         self.value_proj = nn.Linear(embed_dims, embed_dims)
 
         self.init_weights()
-    #---------初始化参数权重和偏差等-----------------
+
     def init_weights(self):
         """Default initialization for Parameters of Module."""
         constant_init(self.sampling_offsets, 0.)
@@ -358,7 +358,7 @@ class MSDeformableAttention3D(BaseModule):
             For each referent point, we sample `num_points` sampling points.这里的num_points是2不是self.num_points=8
             For `num_Z_anchors` reference points,  it has overall `num_points * num_Z_anchors` sampling points.
             """
-            #--------这里相当于4个高度参考点，每个参考点有两个采样点，一共八个点
+           
             offset_normalizer = torch.stack(
                 [spatial_shapes[..., 1], spatial_shapes[..., 0]], -1) # torch.tensor([[40,23]])
 
@@ -371,7 +371,7 @@ class MSDeformableAttention3D(BaseModule):
                 bs, num_query, num_heads, num_levels, num_all_points // num_Z_anchors, num_Z_anchors, xy)
             sampling_locations = reference_points + sampling_offsets #--torch.Size([6, 5438, 8, 1, 2, 4, 2])
             bs, num_query, num_heads, num_levels, num_points, num_Z_anchors, xy = sampling_locations.shape#--torch.Size([6, 5438, 8, 1, 2, 4, 2])
-            assert num_all_points == num_points * num_Z_anchors #----相当于是每个pillar8个点，每个位置两个点
+            assert num_all_points == num_points * num_Z_anchors 
 
             sampling_locations = sampling_locations.view(
                 bs, num_query, num_heads, num_levels, num_all_points, xy)#--torch.Size([6, 5438, 8, 1, 8, 2])

@@ -89,7 +89,7 @@ class MyCustomBaseTransformerLayer(BaseModule):
             feedforward_channels='feedforward_channels',
             ffn_dropout='ffn_drop',
             ffn_num_fcs='num_fcs')
-        #-------------这里会把feedforward_channels和ffn_dropout传入ffn_cfgs--
+
         for ori_name, new_name in deprecated_args.items():
             if ori_name in kwargs:
                 warnings.warn(
@@ -109,7 +109,7 @@ class MyCustomBaseTransformerLayer(BaseModule):
             f' {self.__class__.__name__} should ' \
             f'contains all four operation type ' \
             f"{['self_attn', 'norm', 'ffn', 'cross_attn']}"
-        #---这里是2，两种attention---
+
         num_attn = operation_order.count('self_attn') + operation_order.count(
             'cross_attn')
         if isinstance(attn_cfgs, dict):
@@ -124,9 +124,9 @@ class MyCustomBaseTransformerLayer(BaseModule):
         #-('self_attn', 'norm', 'cross_attn', 'norm','ffn', 'norm')
         self.operation_order = operation_order 
         self.norm_cfg = norm_cfg
-        self.pre_norm = operation_order[0] == 'norm' #--这里是false，第一个不是norm
+        self.pre_norm = operation_order[0] == 'norm'
         self.attentions = ModuleList()
-        #------------创建attention模块---------------
+
         index = 0
         for operation_name in operation_order:
             if operation_name in ['self_attn', 'cross_attn']:
@@ -142,7 +142,6 @@ class MyCustomBaseTransformerLayer(BaseModule):
                 index += 1
 
         self.embed_dims = self.attentions[0].embed_dims
-        #---------创建ffns模块,在mmcv里的transformer里---
         self.ffns = ModuleList()
         num_ffns = operation_order.count('ffn') #--1
         if isinstance(ffn_cfgs, dict):
@@ -154,15 +153,14 @@ class MyCustomBaseTransformerLayer(BaseModule):
             if 'embed_dims' not in ffn_cfgs[ffn_index]:
                 ffn_cfgs['embed_dims'] = self.embed_dims
             else:
-                assert ffn_cfgs[ffn_index]['embed_dims'] == self.embed_dims #---判断是否相等于256
+                assert ffn_cfgs[ffn_index]['embed_dims'] == self.embed_dims
 
             self.ffns.append(
                 build_feedforward_network(ffn_cfgs[ffn_index]))
-        #------创建norm----------
         self.norms = ModuleList()
         num_norms = operation_order.count('norm')
         for _ in range(num_norms):
-            self.norms.append(build_norm_layer(norm_cfg, self.embed_dims)[1])#--这里[1]是因为返回name,layer
+            self.norms.append(build_norm_layer(norm_cfg, self.embed_dims)[1])
 
     def forward(self,
                 query,

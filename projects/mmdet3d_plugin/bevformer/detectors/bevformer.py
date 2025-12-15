@@ -49,13 +49,13 @@ class BEVFormer(MVXTwoStageDetector):
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
                              train_cfg, test_cfg, pretrained)
-        #--------------采用随机掩码图像区域的增强方式-------
+        #--------------Use GridMask augmentation (random image region masking)-------
         self.grid_mask = GridMask(
             True, True, rotate=1, offset=False, ratio=0.5, mode=1, prob=0.7)
         self.use_grid_mask = use_grid_mask  #--true--
         self.fp16_enabled = False
 
-        # temporal测试的时候用来存储历史BEV----------------
+        # temporal: used to store historical BEV during testing----------------
         self.video_test_mode = video_test_mode  #--true-
         self.prev_frame_info = {
             'prev_bev': None,
@@ -64,12 +64,12 @@ class BEVFormer(MVXTwoStageDetector):
             'prev_angle': 0,
         }
         #-----
-        #------------增加bev可视化--------------
+        #------------Enable BEV visualization--------------
         self.draw_interval = 100
         self.vis_time_bev = -1
 
         #-----
-    #----------提取所有图片的特征，backbone与neck,img_metas是空这里没用---------
+    #----------Extract features for all images; backbone and neck; img_metas unused here---------
     def extract_img_feat(self, img, img_metas, len_queue=None):
         """Extract features of images."""
         B = img.size(0)  #--bs*queue=2
@@ -85,26 +85,26 @@ class BEVFormer(MVXTwoStageDetector):
             elif img.dim() == 5 and img.size(0) > 1:
                 B, N, C, H, W = img.size()
                 img = img.reshape(B * N, C, H, W)  #(12,3,736,1280)
-            if self.use_grid_mask:  #----使用掩码，随机掩掉一些区域----
+            if self.use_grid_mask:  #----apply grid mask augmentation, randomly mask some regions----
                 img = self.grid_mask(img)
 
-            img_feats = self.img_backbone(img)  #-----最后一个stage（12,2048,23,40）---
+            img_feats = self.img_backbone(img)  #-----last stage output (12,2048,23,40)---
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
         else:
             return None
         if self.with_img_neck:
-            img_feats = self.img_neck(img_feats) #---（12,256,23,40）---
+            img_feats = self.img_neck(img_feats) #---(12,256,23,40)---
 
         img_feats_reshaped = []
-        for img_feat in img_feats: #---这里因为可能有多尺度的特征----
+        for img_feat in img_feats: #---this is because multiple scales of features may exist----
             BN, C, H, W = img_feat.size()
             if len_queue is not None:
                 img_feats_reshaped.append(img_feat.view(int(B/len_queue), len_queue, int(BN / B), C, H, W))
             else:
                 img_feats_reshaped.append(img_feat.view(B, int(BN / B), C, H, W))
-        return img_feats_reshaped #----返回list，[(1,2,6,256,23,40)]
-    #------提取特征，这里只有图像特征-------
+        return img_feats_reshaped #----return list, [(1,2,6,256,23,40)]
+
     @auto_fp16(apply_to=('img'))
     def extract_feat(self, img, img_metas=None, len_queue=None):
         """Extract features from images and points."""
@@ -135,7 +135,7 @@ class BEVFormer(MVXTwoStageDetector):
         Returns:
             dict: Losses of each branch.
         """
-        #-----这里又会进入到head里面，但是会走transformer前传的过程，包括decoder
+        #-----This will call into the head, passing through the transformer, including the decoder
         '''        outs = {
             'bev_embed': bev_embed,
             'all_cls_scores': outputs_classes,
@@ -146,7 +146,7 @@ class BEVFormer(MVXTwoStageDetector):
         outs = self.pts_bbox_head(
             pts_feats, img_metas, prev_bev) #---outs = {'bev_embed': bev_embed,'all_cls_scores': outputs_classes,'all_bbox_preds': outputs_coords,'enc_cls_scores': None,'enc_bbox_preds': None,}
         
-        # #-----------绘制bev特征图---------------
+        # #-----------Draw BEV feature map---------------
         # self.vis_time_bev += 1
         # if self.vis_time_bev % self.draw_interval == 0:
         #     bev_feat = outs['bev_embed'].clone()
@@ -156,11 +156,11 @@ class BEVFormer(MVXTwoStageDetector):
         #     draw_bevformer_bev_img(bev_feat,img_metas,self.vis_time_bev)
         # #---------------------------------------    
 
-        loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs] #---[[LiDARInstace3DBboxes],[tensor()],{outs},]
+        loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs] #---[[LiDARInstance3DBoxes],[tensor()],{outs},]
         losses = self.pts_bbox_head.loss(*loss_inputs, img_metas=img_metas)
         return losses #-----{loss_cls,loss_bbox,d0.loss_cls,d0.loss_bbox,...d4.loss_cls,d4.loss_bbox}
 
-    #----------加入該部分用来计算FLOPs，small版本--------------------------
+    #----------Add this part to compute FLOPs (small version)--------------------------
     def forward_dummy(self, img,img_metas):
 
         return self.forward_test(img=img, img_metas=img_metas)
@@ -179,7 +179,7 @@ class BEVFormer(MVXTwoStageDetector):
             return self.forward_train(**kwargs)
         else:
             return self.forward_test(**kwargs) #--**kwargs：rescale=True,img_metas,img
-    #--------------获取历史BEV特征--------------
+    #--------------Obtain historical BEV features--------------
     def obtain_history_bev(self, imgs_queue, img_metas_list):
         """Obtain history BEV features iteratively. To save GPU memory, gradients are not calculated.
         """
@@ -188,22 +188,22 @@ class BEVFormer(MVXTwoStageDetector):
         with torch.no_grad():
             prev_bev = None
             bs, len_queue, num_cams, C, H, W = imgs_queue.shape
-            imgs_queue = imgs_queue.reshape(bs*len_queue, num_cams, C, H, W) #--bs和queue合并
-            #---[(1,2,6,256,23,40)]提取图像特征----
+            imgs_queue = imgs_queue.reshape(bs*len_queue, num_cams, C, H, W) #--merge bs and queue
+            #---[(1,2,6,256,23,40)] extract image features----
             img_feats_list = self.extract_feat(img=imgs_queue, len_queue=len_queue) 
-            for i in range(len_queue): #--取前两个img_metas,循环得到前bev-----
+            for i in range(len_queue): #--iterate over the queue to obtain previous BEV frames-----
                 img_metas = [each[i] for each in img_metas_list]
                 if not img_metas[0]['prev_bev_exists']:
                     prev_bev = None
                 # img_feats = self.extract_feat(img=img, img_metas=img_metas)
                 #---img_feats [(1,6,256,23,40)]
                 img_feats = [each_scale[:, i] for each_scale in img_feats_list]
-                #------调用BEVFormerHead-----------
+                #------call BEVFormerHead-----------
                 prev_bev = self.pts_bbox_head(
-                    img_feats, img_metas, prev_bev, only_bev=True)  #---这里调用到BEVFormerHead
+                    img_feats, img_metas, prev_bev, only_bev=True)  #---this calls BEVFormerHead
             self.train()
             return prev_bev
-    #----------amp模式下这里将这两类转fp16，debug过程中还是torch.float32类型------------
+    #----------In amp mode these inputs are converted to fp16; during debugging they remain torch.float32------------
     @auto_fp16(apply_to=('img', 'points'))
     def forward_train(self,
                       points=None,
@@ -246,17 +246,17 @@ class BEVFormer(MVXTwoStageDetector):
         prev_img = img[:, :-1, ...]#(1,2,6,3,736,1280)
         img = img[:, -1, ...]#(1,6,3,736,1280)
 
-        #如果训练的时候不用历史BEV，这里直接prev_bev = None，video_test_mode=False----------
-        #-----相当于bevformer-S--------------
+        #If not using historical BEV during training, set prev_bev = None (video_test_mode=False)----------
+        #-----Equivalent to BEVFormer-S--------------
         prev_img_metas = copy.deepcopy(img_metas)
-        #--获取历史bev---#--[1,22500,256]，这里通过模型不断迭代forward的过程获取----
+        #--obtain historical BEV [1,22500,256] by iterative forward passes----
         if self.video_test_mode:
             prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) 
         else:
             prev_bev = None
         #---------------------
         img_metas = [each[len_queue-1] for each in img_metas]
-        if not img_metas[0]['prev_bev_exists']: #------这里要再加层判断，因为当前帧可能到了下一个场景
+        if not img_metas[0]['prev_bev_exists']: #------Also check this because the current frame may belong to a new scene
             prev_bev = None
         img_feats = self.extract_feat(img=img, img_metas=img_metas)#--[torch.Size([1, 6, 256, 23, 40])]
         losses = dict()
@@ -266,26 +266,26 @@ class BEVFormer(MVXTwoStageDetector):
 
         losses.update(losses_pts)
         return losses
-#------------测试时调用，**kwargs：rescale=True-----------
+
     def forward_test(self, img_metas, img=None, **kwargs):
         for var, name in [(img_metas, 'img_metas')]:
             if not isinstance(var, list):
                 raise TypeError('{} must be a list, but got {}'.format(
                     name, type(var)))
         img = [img] if img is None else img
-        #--------------判断当前帧和前一帧是否一个场景序列中，如果不在则历史bev置空--------
+        #--------------Check whether current frame and previous frame belong to the same scene; if not, clear historical BEV--------
         if img_metas[0][0]['scene_token'] != self.prev_frame_info['scene_token']:
             # the first sample of each scene is truncated
             self.prev_frame_info['prev_bev'] = None
-        # update idx当前帧场景赋值给前一帧场景---------------
+        # update: assign current scene token to prev frame info ---------------
         self.prev_frame_info['scene_token'] = img_metas[0][0]['scene_token']
 
-        # do not use temporal information不使用时序，则历史bev一直是None------
+        # do not use temporal information: if disabled, historical bev remains None------
         if not self.video_test_mode:
             self.prev_frame_info['prev_bev'] = None
 
         # Get the delta of ego position and angle between two timestamps.
-        #------------这里得到两帧之间的位移和角度差，这个信息记录在img_meta中在PerceptionTransformer中变换--------------
+        #------------Compute displacement and angle difference between two timestamps; this info is stored in img_meta and used by PerceptionTransformer--------------
         tmp_pos = copy.deepcopy(img_metas[0][0]['can_bus'][:3])
         tmp_angle = copy.deepcopy(img_metas[0][0]['can_bus'][-1])
         if self.prev_frame_info['prev_bev'] is not None:
@@ -295,19 +295,19 @@ class BEVFormer(MVXTwoStageDetector):
             img_metas[0][0]['can_bus'][-1] = 0
             img_metas[0][0]['can_bus'][:3] = 0
         #--------------------
-        #---这里返回新的BEV和结果列表---
+        #---Return new BEV and result list---
         #--[{'pts_bbox':{'boxes_3d':LiDARInstance3DBoxes,'scores_3d':tensor,'labels_3d':tensor}}]
         new_prev_bev, bbox_results = self.simple_test(
             img_metas[0], img[0], prev_bev=self.prev_frame_info['prev_bev'], **kwargs)
         # During inference, we save the BEV features and ego motion of each timestamp.
         self.prev_frame_info['prev_pos'] = tmp_pos
         self.prev_frame_info['prev_angle'] = tmp_angle
-        self.prev_frame_info['prev_bev'] = new_prev_bev  #---保存当前帧BEV
+        self.prev_frame_info['prev_bev'] = new_prev_bev  #---save current frame BEV
         return bbox_results
 
     def simple_test_pts(self, x, img_metas, prev_bev=None, rescale=False):
         """Test function"""
-        #--------调用head的forward----
+        #--------Call the head's forward----
         '''        outs = {
             'bev_embed': bev_embed,
             'all_cls_scores': outputs_classes,
@@ -317,7 +317,7 @@ class BEVFormer(MVXTwoStageDetector):
         }''' #---[22500,1,256],[6,1,900,10],[6,1,900,10]
         outs = self.pts_bbox_head(x, img_metas, prev_bev=prev_bev)
 
-        # # #-----------绘制bev特征图---------------
+        # # #-----------Draw BEV feature map---------------
         # self.vis_time_bev += 1
         # if self.vis_time_bev % self.draw_interval == 0:
         #     bev_feat = outs['bev_embed'].clone()
@@ -326,7 +326,7 @@ class BEVFormer(MVXTwoStageDetector):
         #     from projects.mmdet3d_plugin.models.utils.visual import draw_bevformer_bev_img
         #     draw_bevformer_bev_img(bev_feat,img_metas,self.vis_time_bev)
         # #---------------------------------------    
-        #-----------测试阶段绘制---------------------
+        #-----------Draw during test stage---------------------
         bev_feat = outs['bev_embed'].clone()
         bev_feat = bev_feat.permute(1,0,2).view(1,160,240,-1)
         bev_feat = bev_feat.permute(0,3,1,2)
@@ -335,16 +335,15 @@ class BEVFormer(MVXTwoStageDetector):
         #---------------------------------------    
 
 
-        #---------调用head中的get_bboxes，解码'all_cls_scores'和'all_bbox_preds'------------
-#--------这里返回[[LiDARInstance3DBoxes,scores,labels]]-------------
+        #---------Call head.get_bboxes to decode 'all_cls_scores' and 'all_bbox_preds'------------
+        #--------This returns [[LiDARInstance3DBoxes, scores, labels]]-------------
         bbox_list = self.pts_bbox_head.get_bboxes(
-            outs, img_metas, rescale=rescale) #--rescale没有用到
+            outs, img_metas, rescale=rescale) #--rescale not used
         bbox_results = [
             bbox3d2result(bboxes, scores, labels)
             for bboxes, scores, labels in bbox_list
-        ] #---------tensor转到cpu--------
+        ] #---------move tensors to CPU--------
         return outs['bev_embed'], bbox_results
-    #---------rescale是True----
     def simple_test(self, img_metas, img=None, prev_bev=None, rescale=False):
         """Test function without augmentaiton."""
         img_feats = self.extract_feat(img=img, img_metas=img_metas) #---[torch.Size([1, 6, 256, 23, 40])]

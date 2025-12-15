@@ -46,7 +46,7 @@ def custom_encode_mask_results(mask_results):
                     cls_segms[i][:, :, np.newaxis], order='F',
                         dtype='uint8'))[0])  # encoded with RLE
     return [encoded_mask_results]
-#-------------这里对result进行了重写---------------------
+#-------------Custom rewrite of result handling---------------------
 def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
     """Test model with multiple gpus.
     This method tests model with multiple gpus and collects the results
@@ -86,9 +86,9 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
                     mask_result = custom_encode_mask_results(result['mask_results'])
                     mask_results.extend(mask_result)
                     have_mask = True
-            else: #--调用以下
+            else: #--call the fallback handling
                 batch_size = len(result) #--1
-                bbox_results.extend(result) #--加入到结果列表
+                bbox_results.extend(result) #--append to the results list
 
 
         if rank == 0:
@@ -112,16 +112,16 @@ def custom_multi_gpu_test(model, data_loader, tmpdir=None, gpu_collect=False):
             mask_results = None
 
     if mask_results is None:
-        return bbox_results  #--完整长度[{'pts_bbox':{'boxes_3d':LiDARInstance3DBoxes,'scores_3d':tensor,'labels_3d':tensor}},{...}]
+        return bbox_results  #--full-length list of bbox results
     return {'bbox_results': bbox_results, 'mask_results': mask_results}
 
 
 def collect_results_cpu(result_part, size, tmpdir=None):
     rank, world_size = get_dist_info()
-    # create a tmp dir if it is not specified创建一个临时文件夹
+    # create a tmp dir if it is not specified
     if tmpdir is None:
         MAX_LEN = 512
-        # 32 is whitespace 512个32
+        # 32 is whitespace. 512 of them
         dir_tensor = torch.full((MAX_LEN, ),
                                 32,
                                 dtype=torch.uint8,
@@ -138,7 +138,7 @@ def collect_results_cpu(result_part, size, tmpdir=None):
         mmcv.mkdir_or_exist(tmpdir)
     
     mmcv.dump(result_part, osp.join(tmpdir, f'part_{rank}.pkl'))
-    dist.barrier()  #---分布式的同步点，等待每个进程结束--
+    dist.barrier()  #---Distributed synchronization barrier, wait for all processes to finish--
     # collect all parts
     if rank != 0:
         return None
@@ -164,4 +164,4 @@ def collect_results_cpu(result_part, size, tmpdir=None):
 
 
 def collect_results_gpu(result_part, size):
-    collect_results_cpu(result_part, size) #----------这俩一样的
+    collect_results_cpu(result_part, size) 

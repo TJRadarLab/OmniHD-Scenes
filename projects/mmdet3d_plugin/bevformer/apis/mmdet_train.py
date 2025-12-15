@@ -39,7 +39,7 @@ def custom_train_detector(model,
    
     dataset = dataset if isinstance(dataset, (list, tuple)) else [dataset]
     #assert len(dataset)==1s
-    #------------这块忽略------------------
+
     if 'imgs_per_gpu' in cfg.data:
         logger.warning('"imgs_per_gpu" is deprecated in MMDet V2.0. '
                        'Please use "samples_per_gpu" instead')
@@ -141,7 +141,7 @@ def custom_train_detector(model,
         optimizer_config = cfg.optimizer_config
 
     # register hooks
-    #-------------注册训练时的hook-------------
+
     runner.register_training_hooks(cfg.lr_config, optimizer_config,
                                    cfg.checkpoint_config, cfg.log_config,
                                    cfg.get('momentum_config', None))
@@ -164,7 +164,7 @@ def custom_train_detector(model,
             # Replace 'ImageToTensor' to 'DefaultFormatBundle'
             cfg.data.val.pipeline = replace_ImageToTensor(
                 cfg.data.val.pipeline)
-        #-------------这里用的custom_build_dataset，没感觉build_dataset有区别-----
+
         val_dataset = custom_build_dataset(cfg.data.val, dict(test_mode=True))
         #-----------shuffle控制---------------
         val_dataloader = build_dataloader(
@@ -176,10 +176,10 @@ def custom_train_detector(model,
             shuffler_sampler=cfg.data.shuffler_sampler,  # dict(type='DistributedGroupSampler'),
             nonshuffler_sampler=cfg.data.nonshuffler_sampler,  # dict(type='DistributedSampler'),
         )  
-        #------这里用的自定义的evalhook，可以动态调整评估间隔------
+
         eval_cfg = cfg.get('evaluation', {})
         eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
-        eval_cfg['jsonfile_prefix'] = osp.join(cfg.work_dir, 'val_result', time.ctime().replace(' ','_').replace(':','_')) #---结果保存
+        eval_cfg['jsonfile_prefix'] = osp.join(cfg.work_dir, 'val_result', time.ctime().replace(' ','_').replace(':','_')) 
         if cfg.get('use_old_custom_multi_gpu_test',False):
             eval_hook = CustomDistEvalHook_old if distributed else EvalHook
         else:
