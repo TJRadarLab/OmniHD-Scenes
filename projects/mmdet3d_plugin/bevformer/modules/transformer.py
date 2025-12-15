@@ -119,8 +119,8 @@ class PerceptionTransformer(BaseModule):
 
         bs = mlvl_feats[0].size(0)  #--（1,6,256,23,40）
         
-        bev_queries = bev_queries.unsqueeze(1).repeat(1, bs, 1) #--重复batch维，（22500，1,256）
-        bev_pos = bev_pos.flatten(2).permute(2, 0, 1) #---(22500,1,256)
+        bev_queries = bev_queries.unsqueeze(1).repeat(1, bs, 1) 
+        bev_pos = bev_pos.flatten(2).permute(2, 0, 1) 
     
         # obtain rotation angle and shift with ego motion
         
@@ -142,14 +142,13 @@ class PerceptionTransformer(BaseModule):
         shift_x = translation_length * \
             np.cos(bev_angle / 180 * np.pi) / grid_length_x / bev_w
         # shift_y = translation_length * \
-        #     np.cos(bev_angle / 180 * np.pi) / grid_length_y / bev_h  #--车头朝前是y
+        #     np.cos(bev_angle / 180 * np.pi) / grid_length_y / bev_h  
         # shift_x = translation_length * \
-        #     np.sin(bev_angle / 180 * np.pi) / grid_length_x / bev_w #--车头右是x
+        #     np.sin(bev_angle / 180 * np.pi) / grid_length_x / bev_w 
         shift_y = shift_y * self.use_shift
         shift_x = shift_x * self.use_shift
         shift = bev_queries.new_tensor(
             [shift_x, shift_y]).permute(1, 0)  # xy, bs -> bs, xy (2,1)-->(1,2)
-    #-----历史BEV旋转--------
         if prev_bev is not None:
             if prev_bev.shape[1] == bev_h * bev_w:
                 prev_bev = prev_bev.permute(1, 0, 2)
@@ -173,7 +172,6 @@ class PerceptionTransformer(BaseModule):
                         bev_h * bev_w, 1, -1)
                     prev_bev[:, i] = tmp_prev_bev[:, 0]
     #-------------------------------------------------------------------
-        # add can bus signals canbus嵌入---------
         can_bus = bev_queries.new_tensor(
             [each['can_bus'] for each in kwargs['img_metas']])  # [:, :]
         can_bus = self.can_bus_mlp(can_bus)[None, :, :]  #--（1,1,256）

@@ -20,7 +20,6 @@ import torch.nn as nn
 class BevEncode(nn.Module):
     def __init__(self, c_in, c_out):
         super(BevEncode, self).__init__()
-        # 定义卷积层和批归一化层
         self.bevencode = nn.Sequential(
             nn.Conv2d(c_in, c_in, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(c_in),
@@ -37,7 +36,6 @@ class BevEncode(nn.Module):
         )
 
     def forward(self, x):
-        # 前向传播
         x = self.bevencode(x[0])
         return x
 

@@ -263,7 +263,7 @@ class TemporalSelfAttention(BaseModule):
 
         # fuse history value and current value
         # (num_query, embed_dims, bs*num_bev_queue)-> (num_query, embed_dims, bs, num_bev_queue)
-        #---[22500,256,2]-->[22500,256,1,2]-->[22500,256,1]历史值和当前值求平均
+        #---[22500,256,2]-->[22500,256,1,2]-->[22500,256,1]
         output = output.view(num_query, embed_dims, bs, self.num_bev_queue)
         output = output.mean(-1)  #----------求平均了--------
 
