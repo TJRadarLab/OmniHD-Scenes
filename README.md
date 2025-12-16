@@ -31,7 +31,7 @@
 ## 🔥 News
 •	**[2025-07-28]** 🚀 Our codebase and detection models have been released.
 
-•	**[2025-04-15]** 🎉 Our OmniHD-Scenes dataset v1.0 (~1.3TB) is openly [accessible](https://www.2077ai.com/contact) for research purposes. A [Python script](download_oss.py) is also available to help with downloading and organizing the data.
+•	**[2025-04-15]** 🎉 OmniHD-Scenes dataset v1.0 (~1.3TB) is now accessible. For research access, simply submit your work email via our [contact page](https://www.2077ai.com/contact). Upon approval, you will receive an English Non-Disclosure Agreement (NDA) and a JSON configuration file. You can then use the provided [Python script](download_oss.py) to download the full dataset from Alibaba Cloud OSS using the JSON key.
 
 •	**[2024-12-31]** 🌐 The [project page](https://www.2077ai.com/OmniHD-Scenes) is now online.
 
