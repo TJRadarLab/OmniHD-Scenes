@@ -250,7 +250,7 @@ def _fill_trainval_infos(newsc,
                 if names[i] in NewScenesDataset.NameMapping:
                     names[i] = NewScenesDataset.NameMapping[names[i]]
                 else:
-                    print(f'不存在此类{names[i]}')
+                    print(f'Do not have this class: {names[i]}')
                     return
             names = np.array(names)
             # we need to convert rot to SECOND format.
