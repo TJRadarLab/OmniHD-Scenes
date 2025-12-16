@@ -117,9 +117,9 @@ def main():
         from mmcv.utils import import_modules_from_strings
         import_modules_from_strings(**cfg['custom_imports'])
 
-    # import modules from plguin/xx, registry will be updated
+    # import modules from plugin/xx, registry will be updated
 
-    #----------导入mmdet3d_pligin-----------------
+    #----------Import mmdet3d_plugin modules-----------------
     if hasattr(cfg, 'plugin'):
         if cfg.plugin:
             import importlib
@@ -164,10 +164,10 @@ def main():
     if args.resume_from is not None and osp.isfile(args.resume_from):
         cfg.resume_from = args.resume_from
     if args.gpu_ids is not None:
-        cfg.gpu_ids = args.gpu_ids  #---后面分布式训练重新赋值
+        cfg.gpu_ids = args.gpu_ids  # Will be reassigned later for distributed training
     else:
         cfg.gpu_ids = range(1) if args.gpus is None else range(args.gpus)
-    #--------------修复了AdamW在1.8版本的bug-----------------------
+    #--------------Fix bug in AdamW for PyTorch 1.8.1-----------------------
     if digit_version(TORCH_VERSION) == digit_version('1.8.1') and cfg.optimizer['type'] == 'AdamW':
         cfg.optimizer['type'] = 'AdamW2' # fix bug in Adamw
     if args.autoscale_lr:
@@ -175,7 +175,7 @@ def main():
         cfg.optimizer['lr'] = cfg.optimizer['lr'] * len(cfg.gpu_ids) / 8
 
     # init distributed env first, since logger depends on the dist info.
-    #------------------分布式训练指定卡数-----------------
+    #------------------Specify GPUs for distributed training-----------------
     if args.launcher == 'none':
         distributed = False
     else:
@@ -204,7 +204,7 @@ def main():
 
     # init the meta dict to record some important information such as
     # environment info and seed, which will be logged
-    #-------------log输出环境变量-------------------
+    #-------------Log environment variables-------------------
     meta = dict()
     # log env info
     env_info_dict = collect_env()
@@ -227,8 +227,8 @@ def main():
     cfg.seed = args.seed
     meta['seed'] = args.seed
     meta['exp_name'] = osp.basename(args.config)
-    #---------这里初始化应该会调用到mmcv中的BaseModule中-----------
-    #---------调用每个子模块的init_weights(self)---------------
+    #---------This initialization should invoke BaseModule in mmcv-----------
+    #---------Calls each submodule's init_weights(self)---------------
     model = build_model(
         cfg.model,
         train_cfg=cfg.get('train_cfg'),
@@ -237,9 +237,9 @@ def main():
 
     logger.info(f'Model:\n{model}')
 
-    #-----------datasets初始化------------
+    #-----------Initialize datasets------------
     datasets = [build_dataset(cfg.data.train)]
-    #---------不走这个分支------
+    #---------This branch is not used in this case------
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         # in case we use a dataset wrapper
@@ -253,7 +253,7 @@ def main():
         val_dataset.test_mode = False
         datasets.append(build_dataset(val_dataset))
     #----------------------------------
-        #--------------checkpoint信息保存--------------
+        #--------------Save checkpoint metadata--------------
     if cfg.checkpoint_config is not None:
         # save mmdet version, config file content and class names in
         # checkpoints as meta data
@@ -273,8 +273,8 @@ def main():
 
     
 
-#----------------------按照bevfusion读取预训练模型----------------------
-#----------读取图像预训练模型,有时候需要重命名------------
+#----------------------Load pretrained models following bevfusion----------------------
+#----------Load image pretrained model; sometimes keys need renaming------------
     if 'load_img_from' in cfg:
         logger.info(cfg.load_img_from)
         checkpoint= torch.load(cfg.load_img_from, map_location='cpu')
@@ -284,10 +284,10 @@ def main():
             state_dict = checkpoint['model']
         else:
             state_dict = checkpoint
-        #------有时模型以module.开头，需要去掉才能对应相应字段---------
+        #------Sometimes state dict keys start with 'module.'; strip the prefix to match keys---------
         if list(state_dict.keys())[0].startswith('module.'):
             state_dict = {k[7:]: v for k, v in state_dict.items()}
-        #----------这里将预训练模型的backbone和neck取出来，重命名成img_backbone和img_neck------
+        #----------Extract pretrained backbone and neck, rename to img_backbone and img_neck------
         ckpt = state_dict
         new_ckpt = OrderedDict()
         for k, v in ckpt.items():
@@ -315,7 +315,7 @@ def main():
                 logger.info(f"Key: {k} - Value: Not found in loaded state_dict")
 
 #-------------------------------------------------------------
-    #---------有时候模型的dict是对应的不需要改名-----------
+    #---------Sometimes the model state_dict matches and does not require renaming-----------
     if 'load_img_from_and_not_change_state_dict' in cfg:
 
         logger.info(cfg.load_img_from_and_not_change_state_dict)
@@ -351,7 +351,7 @@ def main():
 
 #-------------------------------------------------------------
 
-    #------这个是训练好的图像分支，包含了LSS，去掉pts_bbox_head------
+    #------This is a trained image branch that includes LSS; skip pts_bbox_head------
     if 'load_lift_from' in cfg:
         print(cfg.load_lift_from)
         checkpoint= torch.load(cfg.load_lift_from, map_location='cpu')
@@ -385,7 +385,7 @@ def main():
 
 #-------------------------------------------------------------
 
-    #---------读取点云的去掉head之外的部分-----------
+    #---------Load point-cloud pretrained model excluding bbox_head-----------
     if 'load_pts_from' in cfg:
 
         logger.info(cfg.load_pts_from)
@@ -427,7 +427,7 @@ def main():
 
 #-------------------------------------------------------------
 
-    #----------调用plugin/bevformer/apis/mmdet_train--------------
+    #----------Call plugin `bevformer.apis.mmdet_train`--------------
     custom_train_model(
         model,
         datasets,

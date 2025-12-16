@@ -8,11 +8,9 @@ import tqdm
 def merge(root_dir):
     
     for data_type in ['train', 'val']:
-        ## 读取目标检测的pkl文件信息
         data_path = f'{root_dir}/newscenes-final_infos_temporal_{data_type}.pkl'
         data = mmcv.load(data_path)
         metadata = data['metadata']
-        print('调试')
         data_infos = data['infos']
         save_infos = []
         for index in tqdm.tqdm(range(len(data_infos))):

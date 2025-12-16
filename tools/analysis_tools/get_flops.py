@@ -39,7 +39,7 @@ def parse_args():
         'is allowed.')
     args = parser.parse_args()
     return args
-#-------------做一个假输入----------------
+
 def construct_input(input_shape):
     from mmdet3d.core.bbox.structures.box_3d_mode import LiDARInstance3DBoxes
     dummy_metas = {
@@ -47,7 +47,7 @@ def construct_input(input_shape):
                 'can_bus': np.random.random((18)),
                 'lidar2img': [np.random.random((4,4))]*6,
                 'img_shape': [(736, 1280, 3)]*6,
-                # 'img_shape': [(928, 1600, 3)]*6,#超显存
+       
                 "box_type_3d":LiDARInstance3DBoxes, 
                 }
     input =dict(img=[
@@ -78,7 +78,7 @@ def main():
         if len(args.shape) == 1:
             input_shape = (3, args.shape[0], args.shape[0])
         elif len(args.shape) == 2:
-            input_shape = (3,) + tuple(args.shape) #---多加6炉
+            input_shape = (3,) + tuple(args.shape) 
         else:
             raise ValueError('invalid input shape')
     elif args.modality == 'multi':
@@ -90,7 +90,7 @@ def main():
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
     # import modules from string list.
-    #----------导入mmdet3d_pligin-----------------
+ 
     if hasattr(cfg, 'plugin'):
         if cfg.plugin:
             import importlib
@@ -135,7 +135,7 @@ def main():
             'FLOPs counter is currently not supported for {}'.format(
                 model.__class__.__name__))
 
-    flops, params = get_model_complexity_info(model, input_shape,input_constructor=construct_input)#---增加了一个input_constructor
+    flops, params = get_model_complexity_info(model, input_shape,input_constructor=construct_input)
     split_line = '=' * 30
     print(f'{split_line}\nInput shape: {input_shape}\n'
           f'Flops: {flops}\nParams: {params}\n{split_line}')

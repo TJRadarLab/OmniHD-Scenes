@@ -112,8 +112,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    #----------控制输出结果format_only调用dataset.format_results,args.eval调用dataset.evaluation，
-    #----------内部调用format_results，out指定输出文件为pkl--------
+    # Control outputs: `format_only` calls `dataset.format_results`; `args.eval` calls `dataset.evaluate`.
+    # `format_results` is called internally; `out` specifies an output pkl file.
     
     assert args.out or args.eval or args.format_only or args.show \
         or args.show_dir, \
@@ -168,10 +168,10 @@ def main():
         torch.backends.cudnn.allow_tf32 = False
 
     cfg.model.pretrained = None
-    # in case the test dataset is concatenated这里每个gpusample是1-----
+    # In case the test dataset is concatenated: each GPU sample defaults to 1
     samples_per_gpu = 1
     if isinstance(cfg.data.test, dict):
-        cfg.data.test.test_mode = True  #---设置成True
+        cfg.data.test.test_mode = True  # set test_mode True
         samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
         if samples_per_gpu > 1:
             # Replace 'ImageToTensor' to 'DefaultFormatBundle'
@@ -210,16 +210,15 @@ def main():
 
     # build the model and load checkpoint
     cfg.model.train_cfg = None
-    model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))#---test_cfg，train_cfg已经剥离到model里面
+    model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))  # test_cfg/train_cfg handled inside model
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu') #---读取模型参数，里面包括'meta','state_dict','optimizer'
+    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')  # load checkpoint containing 'meta','state_dict','optimizer'
     if args.fuse_conv_bn:  #----False
         model = fuse_conv_bn(model)
-    # old versions did not save class info in checkpoints, this walkaround is
-    # for backward compatibility
-    #---------向后兼容加入类别信息----------------------
+    # old versions did not save class info in checkpoints; this is for
+    # backward compatibility: add class info if present in checkpoint
     if 'CLASSES' in checkpoint.get('meta', {}):
         model.CLASSES = checkpoint['meta']['CLASSES']
     else:
@@ -230,7 +229,7 @@ def main():
     elif hasattr(dataset, 'PALETTE'):
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
-    #----------这里默认不支持非分布式测试----------
+    # Non-distributed testing is not supported by default
     if not distributed:
         assert False
         # model = MMDataParallel(model, device_ids=[0])
@@ -240,7 +239,7 @@ def main():
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
-        #-----------------兼容之前单分支测试-----------------
+        # Compatibility with older single-branch multi-GPU test
         if cfg.get('use_old_custom_multi_gpu_test',False):
             from projects.mmdet3d_plugin.bevformer.apis.test import custom_multi_gpu_test as old_custom_multi_gpu_test
             outputs = old_custom_multi_gpu_test(model, data_loader, args.tmpdir,
@@ -248,19 +247,19 @@ def main():
         else:
             outputs = custom_multi_gpu_test(model, data_loader, args.tmpdir,
                                             args.gpu_collect,args.bad_condition_occ)
-        #---完整长度[{'pts_bbox':{'boxes_3d':LiDARInstance3DBoxes,'scores_3d':tensor,'labels_3d':tensor}},{...}]
+        # Example outputs structure: [{'pts_bbox':{'boxes_3d':..., 'scores_3d':..., 'labels_3d':...}}, ...]
     rank, _ = get_dist_info()
     if rank == 0:
         if args.out:
             print(f'\nwriting results to {args.out}')
             assert False
-            #mmcv.dump(outputs['bbox_results'], args.out) #---这里注释掉了,不用这种方式存储结果
-        #-------------用以下方式存储json结果文件-------------------
-        #---{'jsonfile_prefix':'test/bevformer_small/Wed_Jan_10_15_42_19_2024'}
+            # mmcv.dump(outputs['bbox_results'], args.out)  # commented out; do not store results this way
+        # Store JSON results using the following approach
+        # Example: {'jsonfile_prefix':'test/bevformer_small/Wed_Jan_10_15_42_19_2024'}
         kwargs = {} if args.eval_options is None else args.eval_options
         kwargs['jsonfile_prefix'] = osp.join('test', args.config.split(
             '/')[-1].split('.')[-2], time.ctime().replace(' ', '_').replace(':', '_'))
-        if args.format_only: #-------只生成结果文件不评估---------------
+        if args.format_only:  # only generate result files without evaluation
             dataset.format_results(outputs, **kwargs)
 
         if args.eval:

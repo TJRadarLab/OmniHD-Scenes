@@ -17,17 +17,18 @@ from typing import List, Tuple, Union
 from mmdet3d.core.bbox.box_np_ops import points_cam2img
 from mmdet3d.datasets import NuScenesDataset
 
-#----------10类类别标签-------------------
+# 10 class category labels
 nus_categories = ('car', 'truck', 'trailer', 'bus', 'construction_vehicle',
                   'bicycle', 'motorcycle', 'pedestrian', 'traffic_cone',
                   'barrier')
-#----------属性标签------------------
+
+# attribute labels
 nus_attributes = ('cycle.with_rider', 'cycle.without_rider',
                   'pedestrian.moving', 'pedestrian.standing',
                   'pedestrian.sitting_lying_down', 'vehicle.moving',
                   'vehicle.parked', 'vehicle.stopped', 'None')
 
-#----------生成infos文件------------
+# Generate info files
 def create_nuscenes_infos(root_path,
                           out_path,
                           can_bus_root_path,
@@ -49,7 +50,7 @@ def create_nuscenes_infos(root_path,
     from nuscenes.nuscenes import NuScenes
     from nuscenes.can_bus.can_bus_api import NuScenesCanBus
     print(version, root_path)
-    #--------nuscenes类初始化打印相关log-------------------
+    # initialize NuScenes and print basic info
     nusc = NuScenes(version=version, dataroot=root_path, verbose=True)
     nusc_can_bus = NuScenesCanBus(dataroot=can_bus_root_path)
     from nuscenes.utils import splits
@@ -88,10 +89,10 @@ def create_nuscenes_infos(root_path,
     else:
         print('train scene: {}, val scene: {}'.format(
             len(train_scenes), len(val_scenes)))
-    #-------------生成infos文件-------------
+    # generate infos from raw data
     train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
         nusc, nusc_can_bus, train_scenes, val_scenes, test, max_sweeps=max_sweeps)
-    #-------------dump写入infos.pkl-----------
+    # dump infos to pkl files
     metadata = dict(version=version)
     if test:
         print('test sample: {}'.format(len(train_nusc_infos)))
@@ -111,7 +112,7 @@ def create_nuscenes_infos(root_path,
                                  '{}_infos_temporal_val.pkl'.format(info_prefix))
         mmcv.dump(data, info_val_path)
 
-#--------------判断每个场景lidar是否存在，默认都加入共850个-----------
+# Check whether LiDAR exists for each scene (default: include all scenes)
 def get_available_scenes(nusc):
     """Get available scenes from the input nuscenes class.
 
@@ -152,7 +153,7 @@ def get_available_scenes(nusc):
     print('exist scene num: {}'.format(len(available_scenes)))
     return available_scenes
 
-#-------canbus信息，填充到18位----------
+# Can bus information; pad/format to length 18
 def _get_can_bus_info(nusc, nusc_can_bus, sample):
     scene_name = nusc.get('scene', sample['scene_token'])['name']
     sample_timestamp = sample['timestamp']
@@ -161,7 +162,7 @@ def _get_can_bus_info(nusc, nusc_can_bus, sample):
     except:
         return np.zeros(18)  # server scenes do not have can bus information.
     can_bus = []
-    # during each scene, the first timestamp of can_bus may be large than the first sample's timestamp
+    # during each scene, the first timestamp of can_bus may be larger than the first sample's timestamp
     last_pose = pose_list[0]
     for i, pose in enumerate(pose_list):
         if pose['utime'] > sample_timestamp:
@@ -201,18 +202,19 @@ def _fill_trainval_infos(nusc,
     train_nusc_infos = []
     val_nusc_infos = []
     frame_idx = 0
-    #------------34149个关键帧-------------
-    for sample in mmcv.track_iter_progress(nusc.sample):  
+        # 34149 keyframes
+    for sample in mmcv.track_iter_progress(nusc.sample):
         lidar_token = sample['data']['LIDAR_TOP']
         sd_rec = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
-        #------------这里是每个传感器每辆车相对于ego的外参，不同时间不同车均会不同，长度为10200，每个为一个传感器------
-        #------------这里cs_record是lidar的----------------
+        # calibrated sensor extrinsics for each sensor/vehicle relative to ego;
+        # these vary across time and vehicles (length ~10200, one per sensor)
+        # cs_record corresponds to LiDAR
         cs_record = nusc.get('calibrated_sensor',
-                             sd_rec['calibrated_sensor_token'])
-        #-----------lidar的ego_pose--------------
+                     sd_rec['calibrated_sensor_token'])
+        # LiDAR ego_pose
         pose_record = nusc.get('ego_pose', sd_rec['ego_pose_token'])
-        #-----可以根据token的时间戳插值出任意时刻的boxes，但是默认用lidar关键帧的标注---------
-        #-----这里的bbox在lidar坐标系，并且速度为np.nan----------------
+        # Boxes can be interpolated by token timestamps; default uses LiDAR keyframe annotations
+        # BBoxes are in LiDAR coordinates; velocity may be np.nan
         lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
 
         mmcv.check_file_exist(lidar_path)
@@ -234,12 +236,12 @@ def _fill_trainval_infos(nusc,
             'ego2global_rotation': pose_record['rotation'],
             'timestamp': sample['timestamp'],
         }
-        #-------如果没有下一帧说明该clip结束了，置0------------
+        # If there is no next frame, the clip ends; reset frame_idx to 0
         if sample['next'] == '':
             frame_idx = 0
         else:
             frame_idx += 1
-#-------------lidar2ego的外参和lidar时刻下ego2global的外参，RT矩阵------------
+        # Lidar-to-ego and ego-to-global extrinsics (RT matrices)
         l2e_r = info['lidar2ego_rotation']
         l2e_t = info['lidar2ego_translation']
         e2g_r = info['ego2global_rotation']
@@ -247,8 +249,8 @@ def _fill_trainval_infos(nusc,
         l2e_r_mat = Quaternion(l2e_r).rotation_matrix
         e2g_r_mat = Quaternion(e2g_r).rotation_matrix
 
-        # obtain 6 image's information per frame
-        #-----------添加六路相机的info------------
+        # obtain information for six camera views
+        # add info for six cameras
         camera_types = [
             'CAM_FRONT',
             'CAM_FRONT_RIGHT',
@@ -268,7 +270,7 @@ def _fill_trainval_infos(nusc,
         # obtain sweeps for a single key-frame
         sd_rec = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
         sweeps = []
-        #---------这里是将lidar的前10帧加入到sweeps---------
+        # add up to `max_sweeps` previous LiDAR frames into sweeps
         while len(sweeps) < max_sweeps:
             if not sd_rec['prev'] == '':
                 sweep = obtain_sensor2top(nusc, sd_rec['prev'], l2e_t,
@@ -278,28 +280,28 @@ def _fill_trainval_infos(nusc,
             else:
                 break
         info['sweeps'] = sweeps
-        # obtain annotation
-        #---------获得标签annos-------------
+        # obtain annotations
+        # get annotation records
         if not test:
             annotations = [
                 nusc.get('sample_annotation', token)
                 for token in sample['anns']
             ]
-            #-------------lidar坐标系下xyz，wlh，yaw，速度（中心点/时间算出)------------------------
-            #-------------Box类中含有各类操作---------------
+            # In LiDAR coordinates: xyz, wlh, yaw, velocity (computed from center/time)
+            # Box class provides various operations
             locs = np.array([b.center for b in boxes]).reshape(-1, 3)
             dims = np.array([b.wlh for b in boxes]).reshape(-1, 3)
             rots = np.array([b.orientation.yaw_pitch_roll[0]
                              for b in boxes]).reshape(-1, 1)
             velocity = np.array(
                 [nusc.box_velocity(token)[:2] for token in sample['anns']])
-            #-----------根据框内点数判断有效flag---------------
+            # determine valid_flag based on number of lidar+radar points in the box
             valid_flag = np.array(
                 [(anno['num_lidar_pts'] + anno['num_radar_pts']) > 0
                  for anno in annotations],
                 dtype=bool).reshape(-1)
             # convert velo from global to lidar
-            #---------将速度按外参旋转矩阵分解得到lidar下的速度---------------
+            # rotate velocity by extrinsic matrices to LiDAR frame
             for i in range(len(boxes)):
                 velo = np.array([*velocity[i], 0.0])
                 velo = velo @ np.linalg.inv(e2g_r_mat).T @ np.linalg.inv(
@@ -311,8 +313,8 @@ def _fill_trainval_infos(nusc,
                 if names[i] in NuScenesDataset.NameMapping:
                     names[i] = NuScenesDataset.NameMapping[names[i]]
             names = np.array(names)
-            # we need to convert rot to SECOND format.
-            #-----------------------这里的yaw变成-yaw-pi/2------------
+            # we need to convert rot to SECOND format
+            # convert yaw to -yaw - pi/2
             gt_boxes = np.concatenate([locs, dims, -rots - np.pi / 2], axis=1)
             assert len(gt_boxes) == len(
                 annotations), f'{len(gt_boxes)}, {len(annotations)}'
@@ -332,7 +334,7 @@ def _fill_trainval_infos(nusc,
 
     return train_nusc_infos, val_nusc_infos
 
-#---------------获得对应传感器的外参以及对应pose以及到当前帧lidar的转换矩阵----------
+# Obtain sensor extrinsics, ego pose, and transform to current LiDAR frame
 def obtain_sensor2top(nusc,
                       sensor_token,
                       l2e_t,
@@ -374,7 +376,7 @@ def obtain_sensor2top(nusc,
         'ego2global_rotation': pose_record['rotation'],
         'timestamp': sd_rec['timestamp']
     }
-    #-----------当前sensor的外参和ego_pose-----------
+    # current sensor extrinsics and ego_pose
     l2e_r_s = sweep['sensor2ego_rotation']
     l2e_t_s = sweep['sensor2ego_translation']
     e2g_r_s = sweep['ego2global_rotation']
@@ -382,7 +384,7 @@ def obtain_sensor2top(nusc,
 
     # obtain the RT from sensor to Top LiDAR
     # sweep->ego->global->ego'->lidar
-    #------------当前帧通过pose转到lidar对应时刻的外参----------
+    # transform current frame pose to the LiDAR timestamp
     l2e_r_s_mat = Quaternion(l2e_r_s).rotation_matrix
     e2g_r_s_mat = Quaternion(e2g_r_s).rotation_matrix
     R = (l2e_r_s_mat.T @ e2g_r_s_mat.T) @ (
@@ -395,7 +397,7 @@ def obtain_sensor2top(nusc,
     sweep['sensor2lidar_translation'] = T
     return sweep
 
-#--------------根据3d标注导出2D的annos，包括单目3D---------------
+# Export 2D annotations from 3D labels (including monocular 3D)
 def export_2d_annotation(root_path, info_path, version, mono3d=True):
     """Export 2d annotation from the info file and raw data.
 
@@ -459,7 +461,7 @@ def export_2d_annotation(root_path, info_path, version, mono3d=True):
         json_prefix = f'{info_path[:-4]}'
     mmcv.dump(coco_2d_dict, f'{json_prefix}.coco.json')
 
-#--------------获得2D标注，其中要注意的是朝向角和速度都进行了转换----------------
+# Get 2D annotations; note orientations and velocities are converted
 def get_2d_boxes(nusc,
                  sample_data_token: str,
                  visibilities: List[str],
