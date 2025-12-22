@@ -163,11 +163,13 @@ python projects/setup_bevpool2.py develop
 ```
 ### Generate PKL
 
-Generate PKL file for only 3D object detection training and testing
+> **💡 Note:** We provide a suggested [train/val split](newscenes_devkit/scene_split_trainvaltest_suggested.json) for hyperparameter tuning. For final benchmarking on the **Test set**, please train on the full trainval set.
+> 
+Generate PKL file for only 3D object detection 
 ```
 python ./newscenes_devkit/newscenes_converter_final.py
 ```
-Generate PKL file for Occupancy&OD  training and testing
+Generate PKL file for Occupancy&OD
 ```
 python ./tools/merge_data_with_occ.py
 ```
