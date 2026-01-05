@@ -122,6 +122,10 @@ OmniHD-Scenes
 </div>
 
 ## 🔨 Quick Start
+### Download Dataset
+```
+python download_oss.py --json-file xxxxx.json --download-dir [your path]
+```
 ### Installation
 You can install the whole repository by following these steps:
 
