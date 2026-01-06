@@ -194,7 +194,7 @@ Test a baseline model
 
 ## 🚀 Model Zoo
 
-In this repository, we release baseline models for 3D object detection.
+In this repository, we release baseline models for 3D object detection and occupancy prediction.
 
 |      Methods       |       Modality       |Image Size  | Backbone | mAP | ODS |      Models                         |
 | :--------------------------------------------------------: | :------: | :------: | :------: | :--------: | :-------: | :----------------------------------------------------------: |
@@ -206,12 +206,16 @@ In this repository, we release baseline models for 3D object detection.
 | [BEVFormer-T](projects/configs/bevformer_NewScenes/bevformer_T_R101.py) | Camera |   864×1536    |   R101-DCN    |   32.22   |   32.57   | [Link](https://pan.baidu.com/s/1IhchCkgGndlW8o6TDsQ_Hw?pwd=TJ4D) |
 | [BEVFusion](projects/configs/bevfusion_NewScenes/bevfusion.py) | Camera+4D Radar |   544×960    |   R50    |   33.95  |   43.00   | [Link](https://pan.baidu.com/s/1oYBsA3lQ-S4UhfcN8SpL-Q?pwd=TJ4D) |
 | [RCFusion](projects/configs/RCFusion_NewScenes/rcfusion_lss.py) | Camera+4D Radar |   544×960    |   R50    |   34.88  |   41.53   | [Link](https://pan.baidu.com/s/1kp7-RXjiLTxklEAXt646IA?pwd=TJ4D) |
+
+|      Methods       |       Modality       |Image Size  | Backbone | SC IoU | mIoU |      Models                         |
+| :--------------------------------------------------------: | :------: | :------: | :------: | :--------: | :-------: | :----------------------------------------------------------: |
+| [BEVFusion-OCC](projects/configs/bevfusion_NewScenes/bevfusion_occ.py) | Camera+4D Radar |   544×960    |  R50    |   27.02   |  16.24    | [Link](https://pan.baidu.com/s/1gdNGN80hSNQELFfZ62rAJQ?pwd=2f98) |
 ## ⏳ To Do
 - [x] Release the CodeBase 
 - [x] Release the Evaluation Devkit (For historical reasons, it is referred to by its original project name newscenes_devkit within the code)
-- [x] Release OD baseline models
-- [ ] Release the OCC label
-- [ ] [Release OCC baseline models](https://github.com/LucasYang567/MetaOcc)
+- [x] Release OD baseline model
+- [x] [Release the OCC label](https://pan.baidu.com/s/1xRTC_0MIOkN_-kauH9rM7w?pwd=y7rb)
+- [x] Release OCC baseline model
 
 
 ## ⭐ Others
