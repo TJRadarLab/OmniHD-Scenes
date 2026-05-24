@@ -359,8 +359,13 @@ class LoadMultiViewImageFromFiles_newsc(object):
         for i, name in enumerate(filename):
             current_img = mmcv.imread(name, self.color_type)
             # cv2.imwrite(f'/mnt/zhenglianqing/bevformer_noted/debug_some_imgresult/saved_image_ori_{i}.jpg', current_img)
-            current_img_undistortion = cv2.undistort(current_img, results['cam_intrinsic'][i][:3,:3],\
-                                                      results['cam_distortion'][i], None, results['cam_intrinsic'][i][:3,:3])
+            new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(
+                results['cam_intrinsic'][i][:3,:3], results['cam_distortion'][i], \
+                (current_img.shape[1], current_img.shape[0]), \
+                alpha=1, centerPrincipalPoint=True
+            )
+            current_img_undistortion = cv2.undistort(current_img, results['cam_intrinsic'][i][:3,:3], \
+                                results['cam_distortion'][i], None, new_camera_matrix)
             # cv2.imwrite(f'/mnt/zhenglianqing/bevformer_noted/debug_some_imgresult/saved_image_dist_{i}.jpg', current_img_undistortion)
             if name.split('/')[-2] == 'camera_front' or name.split('/')[-2] == 'camera_back':
                 img_final = mmcv.imresize(current_img_undistortion, (int(current_img_undistortion.shape[1] * scale_factor_frontandback), int(current_img_undistortion.shape[0] * scale_factor_frontandback)), return_scale=False)
