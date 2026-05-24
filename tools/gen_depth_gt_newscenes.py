@@ -106,8 +106,12 @@ def worker(info):
         cam_intrinsic = info['cams'][cam_key]['cam_intrinsic']
         current_img = mmcv.imread(
             os.path.join(info['cams'][cam_key]['data_path']))
-        img = cv2.undistort(current_img, np.array(info['cams'][cam_key]['cam_intrinsic'])[:3,:3],\
-                                                      np.array(info['cams'][cam_key]['cam_distortion']), None, np.array(info['cams'][cam_key]['cam_intrinsic'])[:3,:3])
+        new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(
+            np.array(info['cams'][cam_key]['cam_intrinsic'])[:3,:3], np.array(info['cams'][cam_key]['cam_distortion']), \
+            (current_img.shape[1], current_img.shape[0]), alpha=1, centerPrincipalPoint=True
+        )
+        img = cv2.undistort(current_img, np.array(info['cams'][cam_key]['cam_intrinsic'])[:3,:3], \
+                            np.array(info['cams'][cam_key]['cam_distortion']), None, new_camera_matrix)
         pts_img, depth = map_pointcloud_to_image(
             points.copy(), img, 
             copy.deepcopy(lidar2ego_translation), 

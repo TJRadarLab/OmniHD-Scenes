@@ -415,8 +415,11 @@ if __name__ == '__main__':
             cam_to_ego = newsc.get('sensor_calibration', scene_token)['calib'][current_camera]['camera2ego']
             cam_to_ego = np.array(cam_to_ego, dtype=np.float32)
             ego_to_cam = np.linalg.inv(cam_to_ego)
-
-            img_undistortion = cv2.undistort(img_origin, cam_intric, cam_distortion, None, cam_intric)
+            new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(
+                cam_intric, cam_distortion, (img_origin.shape[1], img_origin.shape[0]), \
+                alpha=1, centerPrincipalPoint=True
+            )
+            img_undistortion = cv2.undistort(img_origin, cam_intric, cam_distortion, None, new_camera_matrix)
 
             camera_intrics.append(cam_intric)
             camera_images.append(img_undistortion)
